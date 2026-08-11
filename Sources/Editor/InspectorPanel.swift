@@ -143,9 +143,9 @@ struct InspectorPanel: View {
     }
 
     private func territoryName(_ id: String) -> String {
-        // `unit(_:)` both throws and returns an optional, so `try?` yields a double
-        // optional that has to be flattened before reading a property off it.
-        guard let found = try? MapLibrary.shared.unit(id), let unit = found else { return id }
+        // `unit(_:)` both throws and returns an optional; `try?` flattens those into
+        // a single optional, so one binding is all that is needed.
+        guard let unit = try? MapLibrary.shared.unit(id) else { return id }
         return unit.name
     }
 
