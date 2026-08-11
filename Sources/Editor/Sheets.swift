@@ -326,16 +326,26 @@ struct SimulatorSheet: View {
 
     private func run() {
         isRunning = true
+        // Everything the background task needs is copied out first: capturing the
+        // view's state directly would drag a non-Sendable SwiftUI struct across the
+        // isolation boundary.
         let project = store.project
         let timeline = project.activeTimeline
+        let attackerID = attacker
+        let defenderID = defender
+        let attackerValues = attackerStrength
+        let defenderValues = defenderStrength
+        let config = SimulationConfig(seed: UInt64(seed), randomness: randomness)
+
         Task.detached(priority: .userInitiated) {
-            let config = SimulationConfig(seed: UInt64(seed), randomness: randomness)
             let war = project.wars.first ?? War(
                 name: "War",
                 interval: timeline.historicalRange,
                 factions: [
-                    Faction(name: "Attacker", colorHex: "5E6860", memberCountryIDs: [attacker]),
-                    Faction(name: "Defender", colorHex: "B04A44", memberCountryIDs: [defender]),
+                    Faction(name: "Attacker", colorHex: "5E6860",
+                            memberCountryIDs: [attackerID]),
+                    Faction(name: "Defender", colorHex: "B04A44",
+                            memberCountryIDs: [defenderID]),
                 ]
             )
             let simulator = (try? WarSimulator(config: config, library: .shared))
@@ -343,7 +353,7 @@ struct SimulatorSheet: View {
             let outcome = simulator.simulate(
                 war: war,
                 initialOwnership: timeline.initialOwnership,
-                strengths: [attacker: attackerStrength, defender: defenderStrength],
+                strengths: [attackerID: attackerValues, defenderID: defenderValues],
                 timeline: timeline
             )
             await MainActor.run {

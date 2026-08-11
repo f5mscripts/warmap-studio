@@ -71,8 +71,12 @@ struct MapCanvasView: View {
                 }
             }
             .contentShape(Rectangle())
-            .gesture(allowsInteraction ? dragGesture(viewport: viewport) : nil)
-            .gesture(allowsInteraction ? magnifyGesture : nil)
+            // `.gesture` takes a concrete gesture, not an optional, so interaction is
+            // switched off through the mask rather than by omitting the modifier.
+            .gesture(dragGesture(viewport: viewport),
+                     including: allowsInteraction ? .all : .subviews)
+            .gesture(magnifyGesture,
+                     including: allowsInteraction ? .all : .subviews)
             .onTapGesture { location in
                 guard let onTapTerritory else { return }
                 let coordinate = transform.coordinate(for: location)
