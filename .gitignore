@@ -1,0 +1,41 @@
+# Xcode
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+!*.xcodeproj/project.xcworkspace
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# XcodeGen generates the project; it is never committed.
+WarMapStudio.xcodeproj/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+._*
+
+# Python tooling (Tools/)
+__pycache__/
+*.pyc
+.venv/
+Tools/.cache/
+Tools/out/
+
+# Codemagic / CI local artifacts
+*.log
+*.mobileprovision
+*.p12
+*.cer
+*.certSigningRequest

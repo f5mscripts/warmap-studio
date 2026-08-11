@@ -1,0 +1,111 @@
+name: WarMapStudio
+
+options:
+  bundleIdPrefix: com.f5mscripts
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+  groupSortPosition: top
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    SWIFT_STRICT_CONCURRENCY: minimal
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+  configs:
+    debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+    release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      SWIFT_COMPILATION_MODE: wholemodule
+
+targets:
+  WarMapStudio:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.f5mscripts.warmapstudio
+        PRODUCT_NAME: WarMap Studio
+        # PRODUCT_NAME has a space, so pin the Swift module name explicitly —
+        # otherwise it derives as `WarMap_Studio` and @testable imports break.
+        PRODUCT_MODULE_NAME: WarMapStudio
+        INFOPLIST_KEY_CFBundleDisplayName: WarMap Studio
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        # Signing is intentionally NOT pinned here. CI builds for the simulator with
+        # CODE_SIGNING_ALLOWED=NO; Codemagic injects manual signing via `use-profiles`.
+    info:
+      path: Sources/App/Info.plist
+      properties:
+        CFBundleDisplayName: WarMap Studio
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        ITSAppUsesNonExemptEncryption: false
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSPhotoLibraryAddUsageDescription: WarMap Studio saves the videos you export to your photo library.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.f5mscripts.warmapstudio.warmap
+            UTTypeDescription: WarMap Studio Project
+            UTTypeConformsTo:
+              - com.apple.package
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - warmap
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: WarMap Studio Project
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes:
+              - com.f5mscripts.warmapstudio.warmap
+
+  WarMapStudioTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/WarMapStudioTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.f5mscripts.warmapstudio.tests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: WarMapStudio
+
+schemes:
+  WarMapStudio:
+    build:
+      targets:
+        WarMapStudio: all
+        WarMapStudioTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - WarMapStudioTests
+    archive:
+      config: Release
