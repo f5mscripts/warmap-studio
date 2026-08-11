@@ -168,15 +168,35 @@ final class MapDataTests: XCTestCase {
     }
 
     func testHistoricalCityNamesResolveByYear() throws {
-        let cities = try library.cities()
-        let istanbul = try XCTUnwrap(cities.first { $0.name == "Istanbul" })
-        XCTAssertEqual(istanbul.name(inYear: 1500), "Constantinople")
-        XCTAssertEqual(istanbul.name(inYear: 2000), "Istanbul")
+        let byName = Dictionary(try library.cities().map { ($0.name, $0) },
+                                uniquingKeysWith: { first, _ in first })
 
-        let volgograd = try XCTUnwrap(cities.first { $0.name == "Volgograd" })
-        XCTAssertEqual(volgograd.name(inYear: 1942), "Stalingrad")
-        XCTAssertEqual(volgograd.name(inYear: 1900), "Tsaritsyn")
-        XCTAssertEqual(volgograd.name(inYear: 2020), "Volgograd")
+        func assertName(_ city: String, inYear year: Int, is expected: String,
+                        line: UInt = #line) throws {
+            let match = try XCTUnwrap(byName[city], "city \(city) is missing", line: line)
+            XCTAssertEqual(match.name(inYear: year), expected, line: line)
+        }
+
+        try assertName("Istanbul", inYear: 1500, is: "Constantinople")
+        try assertName("Istanbul", inYear: 2000, is: "Istanbul")
+        try assertName("Volgograd", inYear: 1900, is: "Tsaritsyn")
+        try assertName("Volgograd", inYear: 1942, is: "Stalingrad")
+        try assertName("Volgograd", inYear: 2020, is: "Volgograd")
+        try assertName("St. Petersburg", inYear: 1942, is: "Leningrad")
+        try assertName("Kaliningrad", inYear: 1940, is: "Königsberg")
+        try assertName("Gdansk", inYear: 1939, is: "Danzig")
+        try assertName("Lviv", inYear: 1930, is: "Lwów")
+    }
+
+    /// A renamed city must stay one city. Shipping "Stalingrad" alongside
+    /// "Volgograd" would put two dots on the same bend of the Volga.
+    func testRenamedCitiesAreNotDuplicatedAsSeparatePlaces() throws {
+        let names = Set(try library.cities().map(\.name))
+        for historicalName in ["Stalingrad", "Leningrad", "Constantinople",
+                               "Danzig", "Königsberg", "Breslau"] {
+            XCTAssertFalse(names.contains(historicalName),
+                           "\(historicalName) should be a historical name, not its own city")
+        }
     }
 
     func testCitiesAreAttachedToTerritories() throws {

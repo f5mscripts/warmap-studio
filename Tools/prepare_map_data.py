@@ -167,10 +167,25 @@ HISTORICAL_CITY_NAMES: dict[str, list[tuple[str, int | None, int | None]]] = {
     "Tbilisi": [("Tiflis", None, 1936), ("Tbilisi", 1936, None)],
 }
 
-# Capitals that matter to the historical scenarios but that Natural Earth's 110m
-# populated-places layer omits or ranks too low to survive the cut.
+# Cities that matter to the historical scenarios but that Natural Earth's 110m
+# populated-places layer omits.
+#
+# Note these carry their *modern* names even when the scenarios want the historical
+# one: HISTORICAL_CITY_NAMES is applied to these entries too, so Volgograd renders as
+# "Stalingrad" on a 1942 map. Adding "Stalingrad" as a separate city instead would
+# put two dots on the Volga.
 EXTRA_CITIES = [
-    {"name": "Stalingrad", "lon": 44.52, "lat": 48.72, "iso": "RUS", "rank": 2},
+    {"name": "Volgograd", "lon": 44.52, "lat": 48.72, "iso": "RUS", "rank": 2},
+    {"name": "St. Petersburg", "lon": 30.31, "lat": 59.94, "iso": "RUS", "rank": 1},
+    {"name": "Kaliningrad", "lon": 20.51, "lat": 54.71, "iso": "RUS", "rank": 3},
+    {"name": "Gdansk", "lon": 18.65, "lat": 54.35, "iso": "POL", "rank": 3},
+    {"name": "Wroclaw", "lon": 17.04, "lat": 51.11, "iso": "POL", "rank": 3},
+    {"name": "Lviv", "lon": 24.03, "lat": 49.84, "iso": "UKR", "rank": 3},
+    {"name": "Chisinau", "lon": 28.86, "lat": 47.01, "iso": "MDA", "rank": 3},
+    {"name": "Almaty", "lon": 76.89, "lat": 43.24, "iso": "KAZ", "rank": 3},
+    {"name": "Guangzhou", "lon": 113.26, "lat": 23.13, "iso": "CHN", "rank": 2},
+    {"name": "Chennai", "lon": 80.27, "lat": 13.08, "iso": "IND", "rank": 2},
+    {"name": "Ho Chi Minh City", "lon": 106.63, "lat": 10.82, "iso": "VNM", "rank": 2},
     {"name": "Sevastopol", "lon": 33.53, "lat": 44.62, "iso": "UKR", "rank": 3},
     {"name": "Verdun", "lon": 5.38, "lat": 49.16, "iso": "FRA", "rank": 4},
     {"name": "Dunkirk", "lon": 2.38, "lat": 51.04, "iso": "FRA", "rank": 4},
@@ -179,7 +194,6 @@ EXTRA_CITIES = [
     {"name": "Kursk", "lon": 36.19, "lat": 51.73, "iso": "RUS", "rank": 3},
     {"name": "Smolensk", "lon": 32.05, "lat": 54.78, "iso": "RUS", "rank": 3},
     {"name": "Brest", "lon": 23.70, "lat": 52.10, "iso": "BLR", "rank": 3},
-    {"name": "Danzig", "lon": 18.65, "lat": 54.35, "iso": "POL", "rank": 3},
     {"name": "Tobruk", "lon": 23.96, "lat": 32.08, "iso": "LBY", "rank": 4},
     {"name": "Cannae", "lon": 16.13, "lat": 41.30, "iso": "ITA", "rank": 5},
     {"name": "Carthage", "lon": 10.32, "lat": 36.85, "iso": "TUN", "rank": 3},
@@ -470,15 +484,23 @@ def build_cities(places: dict, units: list[dict]) -> list[dict]:
         if extra["name"] in seen:
             continue
         seen.add(extra["name"])
-        cities.append({
-            "id": f"city.{extra['name'].lower().replace(' ', '_')}",
+        entry = {
+            "id": f"city.{extra['name'].lower().replace(' ', '_').replace('.', '')}",
             "name": extra["name"],
             "lon": extra["lon"],
             "lat": extra["lat"],
             "unit": locate(extra["lon"], extra["lat"]),
             "importance": extra["rank"],
             "capital": False,
-        })
+        }
+        # Extras get the same historical-name treatment as Natural Earth's own
+        # places, so Volgograd can render as Stalingrad without a second dot.
+        if extra["name"] in HISTORICAL_CITY_NAMES:
+            entry["historicalNames"] = [
+                {"name": n, "startYear": s, "endYear": e}
+                for (n, s, e) in HISTORICAL_CITY_NAMES[extra["name"]]
+            ]
+        cities.append(entry)
 
     cities.sort(key=lambda c: (c["importance"], c["name"]))
     return cities
