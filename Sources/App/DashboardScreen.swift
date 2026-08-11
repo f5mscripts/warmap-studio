@@ -241,42 +241,46 @@ struct ProjectCard: View {
     let onDelete: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
-            Panel(padding: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    thumbnail
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(summary.name)
-                            .font(Theme.Font.cardTitle)
-                            .foregroundStyle(Theme.Palette.textPrimary)
-                            .lineLimit(1)
-                        Text(summary.periodLabel)
+        // Not wrapped in a Button: an outer Button swallows taps meant for the
+        // play/duplicate/delete controls in the footer, which would leave three
+        // buttons that visibly do nothing.
+        Panel(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                thumbnail
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onOpen)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(summary.name)
+                        .font(Theme.Font.cardTitle)
+                        .foregroundStyle(Theme.Palette.textPrimary)
+                        .lineLimit(1)
+                    Text(summary.periodLabel)
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.Palette.gold)
+                    if !summary.subtitle.isEmpty {
+                        Text(summary.subtitle)
                             .font(Theme.Font.caption)
-                            .foregroundStyle(Theme.Palette.gold)
-                        if !summary.subtitle.isEmpty {
-                            Text(summary.subtitle)
-                                .font(Theme.Font.caption)
-                                .foregroundStyle(Theme.Palette.textSecondary)
-                                .lineLimit(1)
-                        }
-                        HStack(spacing: 6) {
-                            Text(summary.modifiedAt, format: .relative(presentation: .named))
-                                .font(Theme.Font.caption)
-                                .foregroundStyle(Theme.Palette.textTertiary)
-                            Spacer()
-                            IconButton(systemName: "play.fill", label: "Play", action: onOpen)
-                            IconButton(systemName: "square.on.square", label: "Duplicate",
-                                       action: onDuplicate)
-                            IconButton(systemName: "trash", label: "Delete",
-                                       tint: Theme.Palette.danger, action: onDelete)
-                        }
-                        .padding(.top, 2)
+                            .foregroundStyle(Theme.Palette.textSecondary)
+                            .lineLimit(1)
                     }
-                    .padding(Theme.Metric.gutterTight)
+                    HStack(spacing: 6) {
+                        Text(summary.modifiedAt, format: .relative(presentation: .named))
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(Theme.Palette.textTertiary)
+                        Spacer()
+                        IconButton(systemName: "play.fill", label: "Play", action: onOpen)
+                        IconButton(systemName: "square.on.square", label: "Duplicate",
+                                   action: onDuplicate)
+                        IconButton(systemName: "trash", label: "Delete",
+                                   tint: Theme.Palette.danger, action: onDelete)
+                    }
+                    .padding(.top, 2)
                 }
+                .padding(Theme.Metric.gutterTight)
+                .contentShape(Rectangle())
             }
         }
-        .buttonStyle(.plain)
         .contextMenu {
             Button("Open", systemImage: "pencil", action: onOpen)
             Button("Duplicate", systemImage: "square.on.square", action: onDuplicate)

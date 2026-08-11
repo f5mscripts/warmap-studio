@@ -1,26 +1,68 @@
 import SwiftUI
 
 /// App-wide state: onboarding, settings, and first-launch seeding.
+///
+/// Settings are `@Published` properties that write through to `UserDefaults` on
+/// change, rather than `@AppStorage`. `@AppStorage` is a `DynamicProperty` built for
+/// views: inside an `ObservableObject` it stores and reads correctly but never fires
+/// `objectWillChange`, so finishing onboarding would set the flag and leave the user
+/// staring at the same screen.
 @MainActor
 public final class AppState: ObservableObject {
 
-    @AppStorage("hasCompletedOnboarding") public var hasCompletedOnboarding = false
-    @AppStorage("hasSeededDemo") private var hasSeededDemo = false
+    private enum Key {
+        static let onboarding = "hasCompletedOnboarding"
+        static let seeded = "hasSeededDemo"
+        static let exportPreset = "defaultExportPresetID"
+        static let fps = "defaultFPS"
+        static let dateFormat = "defaultDateFormat"
+        static let mapStyle = "defaultMapStyle"
+        static let autosave = "autosaveEnabled"
+        static let previewQuality = "previewQuality"
+    }
 
-    @AppStorage("defaultExportPresetID") public var defaultExportPresetID = "tiktok"
-    @AppStorage("defaultFPS") public var defaultFPS = 30
-    @AppStorage("defaultDateFormat") public var defaultDateFormat = HistoricalDate.Format.dayMonthNameYear.rawValue
-    @AppStorage("defaultMapStyle") public var defaultMapStyle = MapStyle.military.rawValue
-    @AppStorage("autosaveEnabled") public var autosaveEnabled = true
-    @AppStorage("previewQuality") public var previewQuality = 1  // 0 draft, 1 normal, 2 high
+    private let defaults: UserDefaults
 
-    public init() {}
+    @Published public var hasCompletedOnboarding: Bool {
+        didSet { defaults.set(hasCompletedOnboarding, forKey: Key.onboarding) }
+    }
+    @Published public var defaultExportPresetID: String {
+        didSet { defaults.set(defaultExportPresetID, forKey: Key.exportPreset) }
+    }
+    @Published public var defaultFPS: Int {
+        didSet { defaults.set(defaultFPS, forKey: Key.fps) }
+    }
+    @Published public var defaultDateFormat: String {
+        didSet { defaults.set(defaultDateFormat, forKey: Key.dateFormat) }
+    }
+    @Published public var defaultMapStyle: String {
+        didSet { defaults.set(defaultMapStyle, forKey: Key.mapStyle) }
+    }
+    @Published public var autosaveEnabled: Bool {
+        didSet { defaults.set(autosaveEnabled, forKey: Key.autosave) }
+    }
+    /// 0 draft, 1 normal, 2 high.
+    @Published public var previewQuality: Int {
+        didSet { defaults.set(previewQuality, forKey: Key.previewQuality) }
+    }
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        hasCompletedOnboarding = defaults.bool(forKey: Key.onboarding)
+        defaultExportPresetID = defaults.string(forKey: Key.exportPreset) ?? "tiktok"
+        defaultFPS = defaults.object(forKey: Key.fps) as? Int ?? 30
+        defaultDateFormat = defaults.string(forKey: Key.dateFormat)
+            ?? HistoricalDate.Format.dayMonthNameYear.rawValue
+        defaultMapStyle = defaults.string(forKey: Key.mapStyle) ?? MapStyle.military.rawValue
+        autosaveEnabled = defaults.object(forKey: Key.autosave) as? Bool ?? true
+        previewQuality = defaults.object(forKey: Key.previewQuality) as? Int ?? 1
+    }
 
     /// Puts the WW2 demo in place the first time the app runs, so the dashboard is
     /// never empty and Play does something immediately.
     public func seedDemoIfNeeded() {
-        guard !hasSeededDemo else { return }
-        hasSeededDemo = true
+        guard !defaults.bool(forKey: Key.seeded) else { return }
+        defaults.set(true, forKey: Key.seeded)
         guard ProjectStore.shared.listProjects().isEmpty else { return }
         try? ProjectStore.shared.save(ScenarioLibrary.ww2Europe())
     }
