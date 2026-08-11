@@ -178,13 +178,11 @@ public struct MapTransform: Equatable, Sendable {
         self.sinR = sin(camera.rotation)
     }
 
-    @inlinable
     public func point(for coordinate: GeoCoordinate) -> CGPoint {
         point(forProjected: projection.project(coordinate))
     }
 
     /// Faster path for callers that already hold projected geometry.
-    @inlinable
     public func point(forProjected p: ProjectedPoint) -> CGPoint {
         let dx = (p.x - originX) * scale
         // Screen y grows downwards while projected y grows north, hence the flip.

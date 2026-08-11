@@ -21,20 +21,15 @@ jobs:
 
       - name: Select Xcode
         run: |
-          ls /Applications | grep -i '^Xcode' || true
           sudo xcode-select -s /Applications/Xcode_16.4.app 2>/dev/null \
             || sudo xcode-select -s /Applications/Xcode.app
           xcodebuild -version
-          swift --version
 
       - name: Install XcodeGen
         run: brew install xcodegen
 
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml
-
-      - name: Show available simulators
-        run: xcrun simctl list devices available | sed -n '1,60p'
 
       - name: Resolve a simulator destination
         id: dest
@@ -48,26 +43,44 @@ jobs:
                 print(ids[-1] if ids else '')")
           if [ -z "$UDID" ]; then echo "No iPhone simulator available" >&2; exit 1; fi
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
-          echo "Using simulator $UDID"
 
+      # xcodebuild echoes every full compiler invocation, which buries the actual
+      # diagnostics thousands of lines deep. Send the raw log to a file and print
+      # only what a human (or an agent reading these logs) needs.
       - name: Build
         run: |
-          set -o pipefail
+          set +e
           xcodebuild build \
             -project WarMapStudio.xcodeproj \
             -scheme WarMapStudio \
             -configuration Debug \
             -destination "id=${{ steps.dest.outputs.udid }}" \
-            CODE_SIGNING_ALLOWED=NO \
-            | tail -400
+            CODE_SIGNING_ALLOWED=NO > build.log 2>&1
+          status=$?
+          grep -E "(error|warning):|^\*\* BUILD" build.log | sort -u | head -80
+          echo "--- build exited $status ---"
+          exit $status
 
       - name: Test
         run: |
-          set -o pipefail
+          set +e
           xcodebuild test \
             -project WarMapStudio.xcodeproj \
             -scheme WarMapStudio \
             -configuration Debug \
             -destination "id=${{ steps.dest.outputs.udid }}" \
-            CODE_SIGNING_ALLOWED=NO \
-            | tail -400
+            CODE_SIGNING_ALLOWED=NO > test.log 2>&1
+          status=$?
+          grep -E "error:|failed|Executed [0-9]+ test|^\*\* TEST" test.log | head -80
+          echo "--- test exited $status ---"
+          exit $status
+
+      - name: Upload raw logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-logs
+          path: |
+            build.log
+            test.log
+          retention-days: 5
