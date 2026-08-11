@@ -1,19 +1,23 @@
 import SwiftUI
 
-/// Top-level router. Onboarding is shown once, then the dashboard becomes the home
-/// surface for the rest of the app's life.
+/// Top-level router. Onboarding runs once; after that the dashboard is home.
 struct RootView: View {
+    @StateObject private var appState = AppState()
+
     var body: some View {
-        ZStack {
-            Theme.atlasBackground.ignoresSafeArea()
-            VStack(spacing: Theme.Metric.gutterTight) {
-                Text("WarMap Studio")
-                    .font(Theme.Font.screenTitle)
-                    .foregroundStyle(Theme.Palette.textPrimary)
-                Text("Historical War Map Creator")
-                    .font(Theme.Font.body)
-                    .foregroundStyle(Theme.Palette.textSecondary)
+        Group {
+            if appState.hasCompletedOnboarding {
+                DashboardScreen()
+            } else {
+                OnboardingView()
             }
+        }
+        .environmentObject(appState)
+        .animation(Theme.Motion.standard, value: appState.hasCompletedOnboarding)
+        .task {
+            // Seed the demo before the dashboard first appears, so Play works
+            // immediately on a fresh install.
+            appState.seedDemoIfNeeded()
         }
     }
 }
