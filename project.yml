@@ -36,11 +36,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.f5mscripts.warmapstudio
-        PRODUCT_NAME: WarMap Studio
-        # PRODUCT_NAME has a space, so pin the Swift module name explicitly —
-        # otherwise it derives as `WarMap_Studio` and @testable imports break.
+        # Keep PRODUCT_NAME spaceless: a space here produces "WarMap Studio.app",
+        # which breaks the test target's TEST_HOST path. The space belongs in
+        # CFBundleDisplayName, which is what actually shows on the home screen.
+        PRODUCT_NAME: WarMapStudio
         PRODUCT_MODULE_NAME: WarMapStudio
-        INFOPLIST_KEY_CFBundleDisplayName: WarMap Studio
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_PREVIEWS: YES
