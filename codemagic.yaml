@@ -1,14 +1,139 @@
+# Codemagic build configuration for WarMap Studio.
+#
+# Signing uses a manually supplied certificate and provisioning profile. NOTHING
+# secret lives in this file: every credential is read from a Codemagic *secure*
+# environment group called `warmap_signing`, which you populate in the Codemagic UI.
+# See README.md for exactly how to produce each value.
+
+definitions:
+  env_versions: &env_versions
+    xcode: 16.4
+    cocoapods: default
+
 workflows:
-  ios-build:
-    name: iOS Build
+
+  # ---------------------------------------------------------------------------
+  # Build a signed IPA for sideloading onto your own device.
+  # ---------------------------------------------------------------------------
+  ios-release:
+    name: WarMap Studio — Signed IPA
     max_build_duration: 60
+    instance_type: mac_mini_m2
 
     environment:
-      xcode: latest
+      <<: *env_versions
+      groups:
+        # Must contain: CM_CERTIFICATE (base64 of your .p12),
+        #               CM_CERTIFICATE_PASSWORD,
+        #               CM_PROVISIONING_PROFILE (base64 of your .mobileprovision)
+        - warmap_signing
+      vars:
+        BUNDLE_ID: "com.f5mscripts.warmapstudio"
+        XCODE_PROJECT: "WarMapStudio.xcodeproj"
+        XCODE_SCHEME: "WarMapStudio"
+
+    triggering:
+      events:
+        - tag
+      cancel_previous_builds: true
 
     scripts:
-      - name: Test step
-        script: echo "Build started"
+      - name: Install XcodeGen
+        script: |
+          brew install xcodegen
+
+      - name: Generate the Xcode project
+        script: |
+          xcodegen generate --spec project.yml
+
+      - name: Set up signing
+        script: |
+          # A fresh keychain per build, so nothing leaks between runs.
+          keychain initialize
+
+          echo "$CM_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
+          keychain add-certificates \
+            --certificate /tmp/certificate.p12 \
+            --certificate-password "$CM_CERTIFICATE_PASSWORD"
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$CM_PROVISIONING_PROFILE" | base64 --decode \
+            > "$HOME/Library/MobileDevice/Provisioning Profiles/warmap.mobileprovision"
+
+          # Writes the matching CODE_SIGN_IDENTITY, PROVISIONING_PROFILE_SPECIFIER
+          # and DEVELOPMENT_TEAM into the generated project.
+          xcode-project use-profiles
+
+          rm -f /tmp/certificate.p12
+
+      - name: Run tests
+        script: |
+          set +e
+          xcodebuild test \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -destination "platform=iOS Simulator,name=iPhone 16" \
+            CODE_SIGNING_ALLOWED=NO > test.log 2>&1
+          status=$?
+          grep -E "error:|Executed [0-9]+ test|^\*\* TEST" test.log | head -40
+          exit $status
+
+      - name: Build the IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --config Release
 
     artifacts:
-      - build/**/*.ipa
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      email:
+        recipients:
+          - $CM_BUILD_EMAIL
+        notify:
+          success: true
+          failure: true
+
+  # ---------------------------------------------------------------------------
+  # Unsigned build + tests on every push. Needs no credentials at all, so it works
+  # before you have set any signing up.
+  # ---------------------------------------------------------------------------
+  ios-ci:
+    name: WarMap Studio — Build & Test
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+
+    environment:
+      <<: *env_versions
+
+    triggering:
+      events:
+        - push
+        - pull_request
+      cancel_previous_builds: true
+
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+
+      - name: Generate the Xcode project
+        script: xcodegen generate --spec project.yml
+
+      - name: Build and test
+        script: |
+          set +e
+          xcodebuild test \
+            -project WarMapStudio.xcodeproj \
+            -scheme WarMapStudio \
+            -destination "platform=iOS Simulator,name=iPhone 16" \
+            CODE_SIGNING_ALLOWED=NO > test.log 2>&1
+          status=$?
+          grep -E "error:|Executed [0-9]+ test|^\*\* (BUILD|TEST)" test.log | head -60
+          exit $status
+
+    artifacts:
+      - test.log
