@@ -7,7 +7,7 @@
 
 definitions:
   env_versions: &env_versions
-    xcode: 16.4
+    xcode: "16.4"
     cocoapods: default
 
 workflows:
@@ -90,13 +90,18 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
-    publishing:
-      email:
-        recipients:
-          - $CM_BUILD_EMAIL
-        notify:
-          success: true
-          failure: true
+    # Build notifications are deliberately not configured here. Codemagic validates
+    # `publishing.email.recipients` eagerly, so an entry that resolves to an unset
+    # variable fails the whole file before a build ever starts. Set notifications in
+    # the Codemagic UI, or uncomment this and put your address in literally:
+    #
+    # publishing:
+    #   email:
+    #     recipients:
+    #       - you@example.com
+    #     notify:
+    #       success: true
+    #       failure: true
 
   # ---------------------------------------------------------------------------
   # Unsigned build + tests on every push. Needs no credentials at all, so it works
