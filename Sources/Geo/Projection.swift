@@ -85,7 +85,7 @@ public enum MapProjectionKind: String, Codable, Sendable, CaseIterable, Identifi
 /// `span` is the width of the viewport measured in projection units, so a smaller
 /// span means a closer camera. Storing span rather than a zoom level keeps
 /// keyframe interpolation linear in something the user can reason about.
-public struct MapCamera: Equatable, Codable, Sendable {
+public struct MapCamera: Hashable, Codable, Sendable {
     public var center: GeoCoordinate
     public var span: Double
     /// Clockwise rotation in radians, applied about the viewport centre.
