@@ -316,12 +316,16 @@ public enum ScenarioLibrary {
                                   action: .captureTerritory(units: ["POL", "UKR-W", "BLR-W",
                                                                     "ROU", "ROU-TRANS-N", "BGR"],
                                                             attacker: "ussr", bearing: 265)))
-        items.append(TimelineItem(title: "Fall of Berlin", start: at(1945, 4, 16), duration: 1.8,
+        // Anchored to the end of the video rather than to its date. April 1945 maps
+        // to 41.5s of a 42s film, so a date-anchored capture would still be
+        // mid-sweep when the video ends and Berlin would never actually fall.
+        let berlinStart = duration - 4.2
+        items.append(TimelineItem(title: "Fall of Berlin", start: berlinStart, duration: 2.6,
                                   easing: .smoothStep,
                                   action: .captureTerritory(units: ["DEU", "AUT", "CZE",
                                                                     "SVK", "RUS-KGD"],
                                                             attacker: "ussr", bearing: 265)))
-        items.append(TimelineItem(title: "Battle of Berlin", start: at(1945, 4, 16), duration: 1.6,
+        items.append(TimelineItem(title: "Battle of Berlin", start: berlinStart, duration: 1.6,
                                   action: .showBattle(BattleMarker(
                                     title: "Battle of Berlin",
                                     detail: "8 May 1945 — Germany surrenders",
@@ -329,7 +333,7 @@ public enum ScenarioLibrary {
                                     coordinate: GeoCoordinate(longitude: 13.4, latitude: 52.52),
                                     kind: .majorBattle,
                                     participantIDs: ["ussr", "germany"]))))
-        items.append(TimelineItem(title: "Berlin falls", start: at(1945, 5, 2), duration: 0,
+        items.append(TimelineItem(title: "Berlin falls", start: berlinStart + 2.6, duration: 0,
                                   action: .captureCity(cityID: "city.berlin", by: "ussr")))
         items.append(TimelineItem(title: "Closing title", start: duration - 4.5, duration: 4.4,
                                   easing: .easeOut,

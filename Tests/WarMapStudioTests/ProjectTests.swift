@@ -303,3 +303,21 @@ private extension JSONDecoder {
         return decoder
     }
 }
+
+extension ProjectTests {
+
+    /// Every clip must finish inside the video. A capture that is still sweeping
+    /// when the last frame is written never actually happens — which is how the
+    /// demo's fall of Berlin was silently unfinished.
+    func testEveryScenarioClipCompletesBeforeTheVideoEnds() {
+        for preset in ScenarioLibrary.all {
+            let timeline = preset.build().timeline
+            for item in timeline.items {
+                XCTAssertLessThanOrEqual(
+                    item.end, timeline.duration + 0.001,
+                    "\(preset.id): “\(item.title)” ends at \(item.end)s, past the \(timeline.duration)s video"
+                )
+            }
+        }
+    }
+}
