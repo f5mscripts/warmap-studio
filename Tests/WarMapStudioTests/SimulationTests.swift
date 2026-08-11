@@ -49,7 +49,9 @@ final class SimulationTests: XCTestCase {
         var second = base.stream("weather")
         var firstAgain = base.stream("combat")
         XCTAssertNotEqual(first.next(), second.next())
-        XCTAssertEqual(base.stream("combat").next(), firstAgain.next())
+        // Same label from the same base must give the same stream every time.
+        var firstOnceMore = base.stream("combat")
+        XCTAssertEqual(firstOnceMore.next(), firstAgain.next())
     }
 
     // MARK: - Combat model

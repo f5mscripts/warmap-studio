@@ -84,3 +84,17 @@ jobs:
             build.log
             test.log
           retention-days: 5
+
+      # Repeat the diagnostics as the very last thing in the job. The artifact
+      # upload above prints thirty lines of its own, which otherwise pushes the
+      # actual errors out of reach of a tail-based log read.
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "================ FAILURE SUMMARY ================"
+          for f in build.log test.log; do
+            [ -f "$f" ] || continue
+            grep -E "error:|^\*\* (BUILD|TEST) FAILED|Executed [0-9]+ test" "$f" \
+              | sort -u | head -40
+          done
+          echo "================= END OF SUMMARY ================="
