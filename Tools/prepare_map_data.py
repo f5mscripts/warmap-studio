@@ -24,13 +24,14 @@ Usage:  python3 Tools/prepare_map_data.py
 from __future__ import annotations
 
 import json
+import math
 import os
 import ssl
 import sys
 import urllib.request
 from typing import Any, Iterable
 
-from shapely.geometry import shape, mapping, box, Polygon, MultiPolygon
+from shapely.geometry import shape, box, LineString, Polygon, MultiPolygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
@@ -321,6 +322,82 @@ def build_units(countries: dict) -> list[dict]:
     return units
 
 
+def node_units(units: list[dict]) -> None:
+    """Insert missing shared vertices so neighbouring outlines agree exactly.
+
+    Cutting a country introduces a vertex where the cut meets an international
+    border — but only on the country being cut. Its neighbour keeps the original
+    straight segment, so the two outlines no longer share identical edges and
+    `build_borders` cannot pair them: the border silently degrades into two
+    overlapping "coastlines". Ukraine cut at 26.7°E next to Belarus cut at 27.2°E
+    is exactly this case.
+
+    Fix it globally by walking every ring segment and splicing in any vertex from
+    any other territory that lies on it. This repairs T-junctions inherited from
+    Natural Earth too, not just the ones our own cuts create.
+
+    Mutates each unit's "geom" in place.
+    """
+    from shapely.geometry import Point
+
+    vertices: set[tuple[float, float]] = set()
+    for u in units:
+        for poly in to_rings(u["geom"]):
+            for ring in poly:
+                for x, y in ring:
+                    vertices.add((x, y))
+
+    points = [Point(v) for v in sorted(vertices)]
+    tree = STRtree(points)
+    # to_rings rounds to 6 decimals, so a vertex can sit up to ~5e-7 off the
+    # neighbouring segment. 1e-6 degrees is about 10 cm — comfortably above that
+    # rounding error and far below any real feature at 110m scale.
+    eps = 1e-6
+    inserted = 0
+
+    def node_ring(ring: list[list[float]]) -> list[list[float]]:
+        nonlocal inserted
+        out: list[list[float]] = []
+        for i in range(len(ring) - 1):
+            a = (ring[i][0], ring[i][1])
+            b = (ring[i + 1][0], ring[i + 1][1])
+            out.append(list(a))
+            seg = LineString([a, b])
+            if seg.length == 0:
+                continue
+            extra = []
+            for j in tree.query(seg.buffer(eps)):
+                p = points[int(j)]
+                c = (p.x, p.y)
+                if c == a or c == b:
+                    continue
+                if seg.distance(p) > eps:
+                    continue
+                t = seg.project(p)
+                if eps < t < seg.length - eps:
+                    extra.append((t, c))
+            extra.sort()
+            for _, c in extra:
+                out.append([c[0], c[1]])
+                inserted += 1
+        out.append(list(ring[-1]))
+        return out
+
+    for u in units:
+        polys = []
+        for poly in to_rings(u["geom"]):
+            noded = [node_ring(r) for r in poly]
+            shell = noded[0]
+            holes = [h for h in noded[1:] if len(h) >= 4]
+            if len(shell) < 4:
+                continue
+            polys.append(Polygon(shell, holes))
+        if polys:
+            u["geom"] = clean(unary_union(polys) if len(polys) > 1 else polys[0])
+
+    print(f"  spliced {inserted} shared vertices")
+
+
 def compute_adjacency(units: list[dict]) -> dict[str, list[str]]:
     """Land neighbours per unit, via an R-tree over slightly buffered geometry."""
     buffered = [u["geom"].buffer(ADJACENCY_SLACK / 2) for u in units]
@@ -407,6 +484,124 @@ def build_cities(places: dict, units: list[dict]) -> list[dict]:
     return cities
 
 
+def build_borders(units: list[dict]) -> list[dict]:
+    """Derive shared boundaries so the renderer can stroke political borders only.
+
+    Territory units are the atoms of ownership, but their edges are not all real
+    borders: the cut that separates Northern Transylvania from the rest of Romania
+    must vanish while both halves belong to Romania. So instead of stroking each
+    unit's outline, we extract every boundary edge once, note which two units share
+    it, and let the renderer decide at draw time — stroke it only when the owners
+    differ. Edges belonging to a single unit are coastline.
+
+    Natural Earth's neighbouring polygons share vertices exactly, and shapely's
+    intersection/difference preserves that for our own cuts, so plain edge equality
+    is enough to pair them up.
+    """
+    edge_owners: dict[tuple, list[str]] = {}
+    for u in units:
+        for poly in to_rings(u["geom"]):
+            for ring in poly:
+                for i in range(len(ring) - 1):
+                    a = (ring[i][0], ring[i][1])
+                    b = (ring[i + 1][0], ring[i + 1][1])
+                    if a == b:
+                        continue
+                    key = (a, b) if a < b else (b, a)
+                    edge_owners.setdefault(key, []).append(u["id"])
+
+    # Group edges by the unordered pair of units that share them.
+    groups: dict[tuple[str, str | None], list[tuple]] = {}
+    for edge, owners in edge_owners.items():
+        uniq = sorted(set(owners))
+        if len(uniq) == 1:
+            key = (uniq[0], None)
+        else:
+            key = (uniq[0], uniq[1])
+        groups.setdefault(key, []).append(edge)
+
+    borders: list[dict] = []
+    for (a, b), edges in groups.items():
+        for line in chain_edges(edges):
+            borders.append({"a": a, "b": b, "points": [[round(x, 6), round(y, 6)] for x, y in line]})
+    return borders
+
+
+def chain_edges(edges: list[tuple]) -> list[list[tuple[float, float]]]:
+    """Stitch unordered segments into the longest possible polylines.
+
+    Fewer, longer polylines mean fewer stroke calls and continuous joins on screen.
+    """
+    adjacency: dict[tuple, list[tuple]] = {}
+    for p, q in edges:
+        adjacency.setdefault(p, []).append(q)
+        adjacency.setdefault(q, []).append(p)
+
+    unused = {(p, q) if p < q else (q, p) for p, q in edges}
+    lines: list[list[tuple]] = []
+
+    def walk(start: tuple) -> list[tuple]:
+        line = [start]
+        cur = start
+        while True:
+            nxt = None
+            for cand in adjacency.get(cur, ()):
+                key = (cur, cand) if cur < cand else (cand, cur)
+                if key in unused:
+                    nxt = cand
+                    unused.discard(key)
+                    break
+            if nxt is None:
+                return line
+            line.append(nxt)
+            cur = nxt
+
+    # Start from open ends first so chains are not cut in the middle, then mop up
+    # any remaining closed loops (islands, enclaves).
+    endpoints = [p for p, nbrs in adjacency.items() if len(nbrs) == 1]
+    for p in endpoints:
+        if any(((p, q) if p < q else (q, p)) in unused for q in adjacency[p]):
+            line = walk(p)
+            if len(line) > 1:
+                lines.append(line)
+    while unused:
+        p = next(iter(unused))[0]
+        line = walk(p)
+        if len(line) > 1:
+            lines.append(line)
+        else:
+            unused.discard(next(iter(unused)))
+    return lines
+
+
+def simplify_line(points: list[list[float]], tol: float) -> list[list[float]]:
+    """Douglas–Peucker on an open polyline."""
+    if tol <= 0 or len(points) < 3:
+        return points
+
+    def rdp(pts: list[list[float]]) -> list[list[float]]:
+        if len(pts) < 3:
+            return pts
+        x0, y0 = pts[0]
+        x1, y1 = pts[-1]
+        dx, dy = x1 - x0, y1 - y0
+        norm = math.hypot(dx, dy)
+        worst_i, worst_d = 0, -1.0
+        for i in range(1, len(pts) - 1):
+            px, py = pts[i]
+            if norm == 0:
+                d = math.hypot(px - x0, py - y0)
+            else:
+                d = abs(dy * px - dx * py + x1 * y0 - y1 * x0) / norm
+            if d > worst_d:
+                worst_i, worst_d = i, d
+        if worst_d <= tol:
+            return [pts[0], pts[-1]]
+        return rdp(pts[:worst_i + 1])[:-1] + rdp(pts[worst_i:])
+
+    return rdp(points)
+
+
 def write_json(path: str, payload: Any) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, separators=(",", ":"), ensure_ascii=False)
@@ -424,6 +619,9 @@ def main() -> int:
     print("Building territory units …")
     units = build_units(countries)
     print(f"  {len(units)} units")
+
+    print("Noding shared vertices …")
+    node_units(units)
 
     dupes = {u["id"] for u in units if [x["id"] for x in units].count(u["id"]) > 1}
     if dupes:
@@ -447,6 +645,19 @@ def main() -> int:
                 rings = to_rings(u["geom"])
             geom_out[u["id"]] = rings
         write_json(os.path.join(OUT, f"geometry-lod{lod}.json"), geom_out)
+
+    print("Extracting borders …")
+    borders = build_borders(units)
+    coast = sum(1 for b in borders if b["b"] is None)
+    print(f"  {len(borders)} polylines ({coast} coastline, {len(borders) - coast} shared)")
+    for lod, tol in enumerate(LOD_TOLERANCE):
+        simplified = []
+        for b in borders:
+            pts = b["points"] if tol == 0 else simplify_line(b["points"], tol)
+            if len(pts) < 2:
+                continue
+            simplified.append({"a": b["a"], "b": b["b"], "points": pts})
+        write_json(os.path.join(OUT, f"borders-lod{lod}.json"), simplified)
 
     print("Writing territories …")
     territories = []
