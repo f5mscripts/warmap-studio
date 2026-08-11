@@ -1,9 +1,13 @@
 # Codemagic build configuration for WarMap Studio.
 #
-# Signing uses a manually supplied certificate and provisioning profile. NOTHING
-# secret lives in this file: every credential is read from a Codemagic *secure*
-# environment group called `warmap_signing`, which you populate in the Codemagic UI.
-# See README.md for exactly how to produce each value.
+# The default workflow produces an UNSIGNED .ipa. That is what re-signing tools
+# (eSign, Sideloadly, AltStore) want: they apply your own certificate when you
+# install, so signing it here would only be thrown away. It needs no Apple
+# credentials at all.
+#
+# `ios-signed` below is for the other route — signing here with your own
+# certificate and installing via Apple Configurator or Xcode. It is manual-start
+# only, and needs a secure environment group; see README.md.
 
 definitions:
   env_versions: &env_versions
@@ -13,103 +17,11 @@ definitions:
 workflows:
 
   # ---------------------------------------------------------------------------
-  # Build a signed IPA for sideloading onto your own device.
+  # Build + test + unsigned IPA. No credentials required. Runs on every push.
   # ---------------------------------------------------------------------------
-  ios-release:
-    name: WarMap Studio — Signed IPA
+  ios-ipa:
+    name: WarMap Studio — Unsigned IPA
     max_build_duration: 60
-    instance_type: mac_mini_m2
-
-    environment:
-      <<: *env_versions
-      groups:
-        # Must contain: CM_CERTIFICATE (base64 of your .p12),
-        #               CM_CERTIFICATE_PASSWORD,
-        #               CM_PROVISIONING_PROFILE (base64 of your .mobileprovision)
-        - warmap_signing
-      vars:
-        BUNDLE_ID: "com.f5mscripts.warmapstudio"
-        XCODE_PROJECT: "WarMapStudio.xcodeproj"
-        XCODE_SCHEME: "WarMapStudio"
-
-    triggering:
-      events:
-        - tag
-      cancel_previous_builds: true
-
-    scripts:
-      - name: Install XcodeGen
-        script: |
-          brew install xcodegen
-
-      - name: Generate the Xcode project
-        script: |
-          xcodegen generate --spec project.yml
-
-      - name: Set up signing
-        script: |
-          # A fresh keychain per build, so nothing leaks between runs.
-          keychain initialize
-
-          echo "$CM_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
-          keychain add-certificates \
-            --certificate /tmp/certificate.p12 \
-            --certificate-password "$CM_CERTIFICATE_PASSWORD"
-
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo "$CM_PROVISIONING_PROFILE" | base64 --decode \
-            > "$HOME/Library/MobileDevice/Provisioning Profiles/warmap.mobileprovision"
-
-          # Writes the matching CODE_SIGN_IDENTITY, PROVISIONING_PROFILE_SPECIFIER
-          # and DEVELOPMENT_TEAM into the generated project.
-          xcode-project use-profiles
-
-          rm -f /tmp/certificate.p12
-
-      - name: Run tests
-        script: |
-          set +e
-          xcodebuild test \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -destination "platform=iOS Simulator,name=iPhone 16" \
-            CODE_SIGNING_ALLOWED=NO > test.log 2>&1
-          status=$?
-          grep -E "error:|Executed [0-9]+ test|^\*\* TEST" test.log | head -40
-          exit $status
-
-      - name: Build the IPA
-        script: |
-          xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME" \
-            --config Release
-
-    artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
-
-    # Build notifications are deliberately not configured here. Codemagic validates
-    # `publishing.email.recipients` eagerly, so an entry that resolves to an unset
-    # variable fails the whole file before a build ever starts. Set notifications in
-    # the Codemagic UI, or uncomment this and put your address in literally:
-    #
-    # publishing:
-    #   email:
-    #     recipients:
-    #       - you@example.com
-    #     notify:
-    #       success: true
-    #       failure: true
-
-  # ---------------------------------------------------------------------------
-  # Unsigned build + tests on every push. Needs no credentials at all, so it works
-  # before you have set any signing up.
-  # ---------------------------------------------------------------------------
-  ios-ci:
-    name: WarMap Studio — Build & Test
-    max_build_duration: 45
     instance_type: mac_mini_m2
 
     environment:
@@ -118,7 +30,6 @@ workflows:
     triggering:
       events:
         - push
-        - pull_request
       cancel_previous_builds: true
 
     scripts:
@@ -140,5 +51,106 @@ workflows:
           grep -E "error:|Executed [0-9]+ test|^\*\* (BUILD|TEST)" test.log | head -60
           exit $status
 
+      - name: Archive for device without signing
+        script: |
+          set -e
+          xcodebuild archive \
+            -project WarMapStudio.xcodeproj \
+            -scheme WarMapStudio \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$CM_BUILD_DIR/build/WarMapStudio.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            > archive.log 2>&1 || {
+              grep -E "error:|^\*\* ARCHIVE" archive.log | head -40
+              exit 1
+            }
+          grep -E "^\*\* ARCHIVE" archive.log || true
+
+      - name: Package the IPA
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/build"
+          APP="WarMapStudio.xcarchive/Products/Applications/WarMapStudio.app"
+          if [ ! -d "$APP" ]; then
+            echo "No .app in the archive. Contents were:"
+            find WarMapStudio.xcarchive/Products -maxdepth 3 || true
+            exit 1
+          fi
+          # An .ipa is just a zip with the app inside a Payload/ directory.
+          rm -rf Payload WarMapStudio-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry WarMapStudio-unsigned.ipa Payload
+          rm -rf Payload
+          echo "Built $(du -h WarMapStudio-unsigned.ipa | cut -f1) IPA"
+
     artifacts:
+      - build/*.ipa
       - test.log
+      - archive.log
+
+  # ---------------------------------------------------------------------------
+  # Signed IPA, for installing via Apple Configurator or Xcode rather than a
+  # re-signing tool. Manual start only — needs the `warmap_signing` group.
+  # ---------------------------------------------------------------------------
+  ios-signed:
+    name: WarMap Studio — Signed IPA
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      <<: *env_versions
+      groups:
+        # Must contain: CM_CERTIFICATE (base64 of your .p12),
+        #               CM_CERTIFICATE_PASSWORD,
+        #               CM_PROVISIONING_PROFILE (base64 of your .mobileprovision)
+        - warmap_signing
+
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+
+      - name: Generate the Xcode project
+        script: xcodegen generate --spec project.yml
+
+      - name: Set up signing
+        script: |
+          set -e
+          keychain initialize
+
+          echo "$CM_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
+          keychain add-certificates \
+            --certificate /tmp/certificate.p12 \
+            --certificate-password "$CM_CERTIFICATE_PASSWORD"
+          rm -f /tmp/certificate.p12
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$CM_PROVISIONING_PROFILE" | base64 --decode \
+            > "$HOME/Library/MobileDevice/Provisioning Profiles/warmap.mobileprovision"
+
+          # Writes the signing settings into the generated project AND produces
+          # ~/export_options.plist, which build-ipa needs. If the profile does not
+          # match the bundle id, that plist is never written — so fail loudly here
+          # rather than three steps later with a confusing "path does not exist".
+          xcode-project use-profiles
+
+          if [ ! -f "$HOME/export_options.plist" ]; then
+            echo "use-profiles produced no export options." >&2
+            echo "The provisioning profile probably does not match com.f5mscripts.warmapstudio." >&2
+            exit 1
+          fi
+
+      - name: Build the signed IPA
+        script: |
+          xcode-project build-ipa \
+            --project "WarMapStudio.xcodeproj" \
+            --scheme "WarMapStudio" \
+            --config Release
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
