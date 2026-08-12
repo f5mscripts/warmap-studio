@@ -191,9 +191,17 @@ public final class MapSceneRenderer {
                        context: context)
         }
 
-        // 9. Text last, so nothing draws over a title.
+        // 9. Text.
         for text in snapshot.texts {
             drawText(text, viewport: transform.viewport, pixel: pixel, context: context)
+        }
+
+        // 10. The matchup card last of all: it is a full-frame overlay, and anything
+        //     drawn after it would appear to float in front of a card that is meant
+        //     to have stopped the film.
+        if let versus = snapshot.versusCard {
+            drawVersusCard(versus, countries: countries, date: snapshot.date, style: style,
+                           viewport: transform.viewport, pixel: pixel, context: context)
         }
     }
 
@@ -205,7 +213,8 @@ public final class MapSceneRenderer {
 
         guard style.isPixelated else {
             for (id, country) in countries {
-                colorCache[id] = FlagRenderer.cgColor(country.colorHex)
+                colorCache[id] = ColorTuning.cgColor(country.colorHex,
+                                                     saturationBoost: style.fillSaturationBoost)
             }
             return
         }
@@ -372,7 +381,8 @@ public final class MapSceneRenderer {
                 // contain, so the pixel edge is opaque paper instead.
                 context.setStrokeColor(FlagRenderer.cgColor(PixelPalette.paper))
             }
-            context.setLineWidth(2)
+            let edge = CGFloat(style.contestedEdgeWidth)
+            context.setLineWidth(pixel.map { $0.size(edge, minimum: 1) } ?? edge)
             let perpendicular = CGVector(dx: -normal.dy, dy: normal.dx)
             let reach = max(box.width, box.height) * 2
             context.beginPath()
@@ -682,17 +692,39 @@ public final class MapSceneRenderer {
                 usesShortName = fontSize < 7
             }
             let text = usesShortName ? country.shortName : country.name.uppercased()
+            // A flag beside the name is the quickest read of who holds a place, but
+            // only where the label is big enough that the badge is not a smudge.
+            let flag = style.showsFlags && fontSize >= (pixel == nil ? 14 : 7)
+                ? country.flag(on: snapshot.date)?.spec : nil
+            let badgeWidth: CGFloat = flag == nil ? 0 : (pixel == nil ? fontSize * 1.35 : 7)
+            let badgeHeight: CGFloat = flag == nil ? 0 : (pixel == nil ? fontSize * 0.9 : 5)
+            let badgeGap: CGFloat = flag == nil ? 0 : (pixel == nil ? 5 : 2)
             // A serif face and letter spacing are detail the grid cannot hold; at
             // these sizes both just smear the glyphs.
             let usesSerif = pixel == nil
             let spacing: Double = pixel == nil ? 1.5 : 0
             let size = TextDrawing.measure(text, fontSize: fontSize, weight: 700,
                                            usesSerif: usesSerif, letterSpacing: spacing)
-            var origin = CGPoint(x: point.x - size.width / 2, y: point.y - size.height / 2)
+            // The badge is part of the label as far as collision is concerned, so a
+            // flag never lands on top of a neighbour's name.
+            let total = CGSize(width: size.width + badgeWidth + badgeGap, height: size.height)
+            var origin = CGPoint(x: point.x - total.width / 2 + badgeWidth + badgeGap,
+                                 y: point.y - size.height / 2)
             if pixel != nil { origin = PixelGrid.snap(origin) }
-            let box = CGRect(origin: origin, size: size).insetBy(dx: -4, dy: -3)
+            let box = CGRect(x: origin.x - badgeWidth - badgeGap, y: origin.y,
+                             width: total.width, height: total.height).insetBy(dx: -4, dy: -3)
             guard !placed.contains(where: { $0.intersects(box) }) else { continue }
             placed.append(box)
+
+            if let flag {
+                var badge = CGRect(x: origin.x - badgeWidth - badgeGap,
+                                   y: point.y - badgeHeight / 2,
+                                   width: badgeWidth, height: badgeHeight)
+                if pixel != nil { badge = PixelGrid.snap(badge) }
+                context.setFillColor(color(style.labelOutlineHex))
+                context.fill(badge.insetBy(dx: -1, dy: -1))
+                FlagRenderer.draw(flag, in: badge, context: context)
+            }
 
             TextDrawing.draw(text, at: origin, fontSize: fontSize, weight: 700,
                              usesSerif: usesSerif,
@@ -887,6 +919,159 @@ public final class MapSceneRenderer {
                              context: context)
         }
         context.restoreGState()
+    }
+
+    // MARK: - Versus card
+
+    /// The pre-war matchup: both coalitions' flags, names and strength bars over a
+    /// dimmed map.
+    ///
+    /// Everything is sized from the viewport rather than in fixed points, so the same
+    /// card composes correctly at 1080 × 1920, at 16:9, and in the editor's preview
+    /// pane — the layout is the one thing here that must not be authored for one
+    /// output size.
+    private func drawVersusCard(_ resolved: ResolvedVersusCard,
+                                countries: [String: Country],
+                                date: HistoricalDate,
+                                style: MapRenderStyle,
+                                viewport: CGSize,
+                                pixel: PixelPass?,
+                                context: CGContext) {
+        guard resolved.opacity > 0.001, viewport.width > 0, viewport.height > 0 else { return }
+        let card = resolved.card
+        let alpha = CGFloat(min(max(resolved.opacity, 0), 1))
+
+        context.saveGState()
+
+        // Dim the map so the card reads as a break in the action.
+        context.setAlpha(alpha * 0.86)
+        context.setFillColor(color(style.labelOutlineHex))
+        context.fill(CGRect(origin: .zero, size: viewport))
+        context.setAlpha(alpha)
+
+        let fractions = card.barFractions
+        drawVersusSide(name: card.sideAName,
+                       countryIDs: card.sideACountryIDs,
+                       barFraction: fractions.a,
+                       centreY: viewport.height * 0.30,
+                       countries: countries, date: date, style: style,
+                       viewport: viewport, pixel: pixel, context: context)
+
+        // The "VS" between them, in the accent colour.
+        let vsSize = scaled(viewport.height * 0.055, pixel: pixel, minimum: 7)
+        let vsWidth = TextDrawing.measure("VS", fontSize: vsSize, weight: 900,
+                                          usesSerif: pixel == nil).width
+        TextDrawing.draw("VS",
+                         at: snapped(CGPoint(x: (viewport.width - vsWidth) / 2,
+                                             y: viewport.height * 0.5 - vsSize * 0.6),
+                                     pixel: pixel),
+                         fontSize: vsSize, weight: 900, usesSerif: pixel == nil,
+                         color: color(style.capitalDotHex),
+                         outline: color(style.labelOutlineHex),
+                         outlineWidth: pixel == nil ? 4 : 1,
+                         context: context)
+
+        drawVersusSide(name: card.sideBName,
+                       countryIDs: card.sideBCountryIDs,
+                       barFraction: fractions.b,
+                       centreY: viewport.height * 0.70,
+                       countries: countries, date: date, style: style,
+                       viewport: viewport, pixel: pixel, context: context)
+
+        context.restoreGState()
+    }
+
+    /// One half of the card: a row of flags, the coalition's name, and its bar.
+    private func drawVersusSide(name: String,
+                                countryIDs: [String],
+                                barFraction: Double,
+                                centreY: CGFloat,
+                                countries: [String: Country],
+                                date: HistoricalDate,
+                                style: MapRenderStyle,
+                                viewport: CGSize,
+                                pixel: PixelPass?,
+                                context: CGContext) {
+        let cardWidth = viewport.width * 0.78
+        let left = (viewport.width - cardWidth) / 2
+
+        // Flags, up to six of them; beyond that the rest are counted rather than
+        // shrunk into illegibility.
+        let shown = Array(countryIDs.prefix(6))
+        let flagHeight = scaled(viewport.height * 0.036, pixel: pixel, minimum: 4)
+        let flagWidth = flagHeight * 1.5
+        let gap = scaled(viewport.width * 0.012, pixel: pixel, minimum: 1)
+        let extra = countryIDs.count - shown.count
+        let rowWidth = CGFloat(shown.count) * flagWidth
+            + CGFloat(max(0, shown.count - 1)) * gap
+        var flagX = (viewport.width - rowWidth) / 2
+        let flagY = centreY - flagHeight * 1.9
+
+        for id in shown {
+            let box = snapped(CGRect(x: flagX, y: flagY, width: flagWidth, height: flagHeight),
+                              pixel: pixel)
+            context.setFillColor(color(style.labelHex))
+            context.fill(box.insetBy(dx: -1, dy: -1))
+            if let flag = countries[id]?.flag(on: date)?.spec {
+                FlagRenderer.draw(flag, in: box, context: context)
+            } else {
+                context.setFillColor(colorCache[id] ?? color(style.neutralLandHex))
+                context.fill(box)
+            }
+            flagX += flagWidth + gap
+        }
+
+        if extra > 0 {
+            let size = scaled(viewport.height * 0.022, pixel: pixel, minimum: 5)
+            TextDrawing.draw("+\(extra)",
+                             at: snapped(CGPoint(x: flagX + gap, y: flagY + flagHeight / 4),
+                                         pixel: pixel),
+                             fontSize: size, weight: 700, usesSerif: false,
+                             color: color(style.labelHex), outline: nil, outlineWidth: 0,
+                             context: context)
+        }
+
+        // Name.
+        let nameSize = scaled(viewport.height * 0.032, pixel: pixel, minimum: 6)
+        let text = name.uppercased()
+        let measured = TextDrawing.measure(text, fontSize: nameSize, weight: 800,
+                                           usesSerif: pixel == nil)
+        TextDrawing.draw(text,
+                         at: snapped(CGPoint(x: (viewport.width - measured.width) / 2,
+                                             y: centreY - nameSize * 0.2),
+                                     pixel: pixel),
+                         fontSize: nameSize, weight: 800, usesSerif: pixel == nil,
+                         color: color(style.labelHex),
+                         outline: color(style.labelOutlineHex),
+                         outlineWidth: pixel == nil ? 3 : 1,
+                         context: context)
+
+        // Strength bar.
+        let barHeight = scaled(viewport.height * 0.012, pixel: pixel, minimum: 2)
+        let track = snapped(CGRect(x: left, y: centreY + nameSize * 1.1,
+                                   width: cardWidth, height: barHeight),
+                            pixel: pixel)
+        context.setFillColor(color(style.neutralLandHex))
+        context.fill(track)
+        let filled = CGRect(x: track.minX, y: track.minY,
+                            width: max(1, track.width * CGFloat(min(max(barFraction, 0), 1))),
+                            height: track.height)
+        context.setFillColor(colorCache[countryIDs.first ?? ""] ?? color(style.capitalDotHex))
+        context.fill(pixel == nil ? filled : PixelGrid.snap(filled))
+    }
+
+    /// A size authored against the output, expressed in whatever space is being
+    /// drawn into.
+    private func scaled(_ points: CGFloat, pixel: PixelPass?, minimum: CGFloat) -> CGFloat {
+        pixel.map { $0.size(points, minimum: minimum) } ?? points
+    }
+
+    private func snapped(_ point: CGPoint, pixel: PixelPass?) -> CGPoint {
+        pixel == nil ? point : PixelGrid.snap(point)
+    }
+
+    private func snapped(_ rect: CGRect, pixel: PixelPass?) -> CGRect {
+        pixel == nil ? rect : PixelGrid.snap(rect)
     }
 
     private func drawText(_ text: ResolvedText, viewport: CGSize, pixel: PixelPass?,

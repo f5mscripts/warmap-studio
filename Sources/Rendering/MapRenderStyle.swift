@@ -30,6 +30,15 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
     /// Extra brightness applied to the attacking colour during a capture, so an
     /// advance reads clearly even between two similar faction colours.
     public var contestedHighlight: Double
+    /// How wide that leading edge is drawn, in points. A two-point line disappears
+    /// on a phone; this is the glow that sells the advance.
+    public var contestedEdgeWidth: Double
+    /// How far country fills are pushed towards their saturated form, 0…1.
+    ///
+    /// The historical palette is full of khaki and slate, which reads as mud at
+    /// phone size. This leaves the country's own colour untouched and only changes
+    /// what gets painted.
+    public var fillSaturationBoost: Double
 
     public var showsCities: Bool
     /// Cities with `importance` above this are hidden. 1 shows only world cities.
@@ -64,7 +73,9 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
                 labelHex: String = "F2EDE1",
                 labelOutlineHex: String = "0B0D10",
                 territoryOpacity: Double = 1.0,
-                contestedHighlight: Double = 0.16,
+                contestedHighlight: Double = 0.45,
+                contestedEdgeWidth: Double = 5,
+                fillSaturationBoost: Double = 0.35,
                 showsCities: Bool = true,
                 maximumCityImportance: Int = 2,
                 showsCapitalsOnly: Bool = false,
@@ -88,6 +99,8 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
         self.labelOutlineHex = labelOutlineHex
         self.territoryOpacity = territoryOpacity
         self.contestedHighlight = contestedHighlight
+        self.contestedEdgeWidth = contestedEdgeWidth
+        self.fillSaturationBoost = min(max(fillSaturationBoost, 0), 1)
         self.showsCities = showsCities
         self.maximumCityImportance = maximumCityImportance
         self.showsCapitalsOnly = showsCapitalsOnly
@@ -127,6 +140,10 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
             ?? fallback.territoryOpacity
         contestedHighlight = try c.decodeIfPresent(Double.self, forKey: .contestedHighlight)
             ?? fallback.contestedHighlight
+        contestedEdgeWidth = try c.decodeIfPresent(Double.self, forKey: .contestedEdgeWidth)
+            ?? fallback.contestedEdgeWidth
+        fillSaturationBoost = try c.decodeIfPresent(Double.self, forKey: .fillSaturationBoost)
+            ?? fallback.fillSaturationBoost
         showsCities = try c.decodeIfPresent(Bool.self, forKey: .showsCities) ?? fallback.showsCities
         maximumCityImportance = try c.decodeIfPresent(Int.self, forKey: .maximumCityImportance)
             ?? fallback.maximumCityImportance
@@ -147,7 +164,7 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
     public static func preset(_ style: MapStyle) -> MapRenderStyle {
         switch style {
         case .military:
-            return MapRenderStyle()
+            return MapRenderStyle(borderWidth: 2.8, showsFlags: true)
 
         case .atlas:
             return MapRenderStyle(oceanHex: "1B2B3A",
@@ -155,7 +172,8 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
                                   neutralLandHex: "7C838C",
                                   coastlineHex: "51606E",
                                   borderHex: "10151A",
-                                  borderWidth: 1.6,
+                                  borderWidth: 2.4,
+                                  showsFlags: true,
                                   showsGraticule: true,
                                   graticuleHex: "24384A")
 
@@ -166,13 +184,17 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
                                   coastlineHex: "6E5C3A",
                                   borderHex: "4A3B22",
                                   coastlineWidth: 1.2,
-                                  borderWidth: 2.2,
+                                  borderWidth: 3,
                                   cityDotHex: "3A2E1A",
                                   cityLabelHex: "3A2E1A",
                                   capitalDotHex: "7A5A1E",
                                   labelHex: "3A2E1A",
                                   labelOutlineHex: "E8DCC0",
                                   territoryOpacity: 0.82,
+                                  // Parchment is meant to look aged, so it keeps
+                                  // more of the muted palette than the others.
+                                  fillSaturationBoost: 0.2,
+                                  showsFlags: true,
                                   showsGraticule: true,
                                   graticuleHex: "AD9C74")
 
@@ -182,8 +204,11 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
                                   neutralLandHex: "CDC3A5",
                                   coastlineHex: "5A5340",
                                   borderHex: "3E3728",
+                                  borderWidth: 2.6,
                                   cityDotHex: "34301F",
                                   territoryOpacity: 0.86,
+                                  fillSaturationBoost: 0.2,
+                                  showsFlags: true,
                                   showsGraticule: true,
                                   graticuleHex: "8A9378")
 
@@ -207,9 +232,13 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
                                   // into a colour that is in neither.
                                   territoryOpacity: 1.0,
                                   contestedHighlight: 0.55,
+                                  contestedEdgeWidth: 2,
+                                  // The palette is already as saturated as it gets.
+                                  fillSaturationBoost: 0,
                                   showsCities: true,
                                   maximumCityImportance: 1,
                                   showsCountryLabels: true,
+                                  showsFlags: true,
                                   showsGraticule: false,
                                   graticuleHex: PixelPalette.shallowSea,
                                   isPixelated: true,

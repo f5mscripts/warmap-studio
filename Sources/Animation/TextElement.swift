@@ -85,15 +85,20 @@ public struct TextStyle: Codable, Hashable, Sendable {
         self.isUppercase = isUppercase
     }
 
-    public static let title = TextStyle(fontSize: 64, weight: 800, usesSerif: true,
-                                        letterSpacing: 3, shadowRadius: 12,
+    // Sized for a phone held at arm's length, where a 64-point title over a busy map
+    // is smaller than it sounds. Everything here is deliberately louder than a print
+    // map would be.
+    public static let title = TextStyle(fontSize: 84, weight: 900, usesSerif: true,
+                                        letterSpacing: 4, outlineColorHex: "0B0D10",
+                                        outlineWidth: 2, shadowRadius: 14,
                                         isUppercase: true)
-    public static let subtitle = TextStyle(fontSize: 34, weight: 600, usesSerif: true,
+    public static let subtitle = TextStyle(fontSize: 42, weight: 700, usesSerif: true,
                                            colorHex: "C9A227")
-    public static let caption = TextStyle(fontSize: 24, weight: 500, usesSerif: false,
-                                          colorHex: "A8A296")
-    public static let dateCounter = TextStyle(fontSize: 44, weight: 700, usesSerif: false,
-                                              colorHex: "F2EDE1", letterSpacing: 1)
+    public static let caption = TextStyle(fontSize: 30, weight: 600, usesSerif: false,
+                                          colorHex: "E8DCC0")
+    public static let dateCounter = TextStyle(fontSize: 54, weight: 800, usesSerif: false,
+                                              colorHex: "F2EDE1", letterSpacing: 1,
+                                              outlineColorHex: "0B0D10", outlineWidth: 2)
 }
 
 public enum TextAlignmentOption: String, Codable, CaseIterable, Sendable {
@@ -189,14 +194,17 @@ public enum TextAnimator {
     ///
     /// `progress` runs 0…1 across the element's own timeline item. The entry
     /// animation occupies the first `entryFraction`, the exit the last, and the
-    /// middle is held steady — so lengthening a title on the timeline makes it stay
+    /// middle is held steady. Both are short on purpose: a caption that takes a
+    /// quarter of its life arriving reads as sluggish in a forty-second video, and
+    /// the whole point of a caption is to be legible for as long as possible — so
+    /// lengthening a title on the timeline makes it stay
     /// longer rather than animate slower.
     public static func resolve(_ element: TextElement,
                                progress: Double,
                                date: HistoricalDate,
                                easing: EasingCurve,
-                               entryFraction: Double = 0.25,
-                               exitFraction: Double = 0.15) -> ResolvedText {
+                               entryFraction: Double = 0.12,
+                               exitFraction: Double = 0.10) -> ResolvedText {
         let p = min(max(progress, 0), 1)
 
         let entry = entryFraction > 0 ? min(p / entryFraction, 1) : 1

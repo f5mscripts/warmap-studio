@@ -241,6 +241,25 @@ struct InspectorPanel: View {
                             Text(format.displayName).tag(format)
                         }
                     }
+                    Toggle("Country flags", isOn: Binding(
+                        get: { store.project.renderStyle.showsFlags },
+                        set: { newValue in
+                            store.apply("Toggle Flags") { $0.renderStyle.showsFlags = newValue }
+                        }))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Camera drift \(Int(store.project.ambientZoomRate * 1000))")
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(Theme.Palette.textSecondary)
+                        Slider(value: Binding(
+                            get: { store.project.ambientZoomRate },
+                            set: { newValue in
+                                store.apply("Change Camera Drift") { $0.ambientZoomRate = newValue }
+                            }), in: 0...0.04)
+                            .tint(Theme.Palette.gold)
+                        Text("A slow push-in between camera keyframes, so a held shot never looks like a still. 0 turns it off.")
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(Theme.Palette.textTertiary)
+                    }
                     Toggle("Show cities", isOn: Binding(
                         get: { store.project.renderStyle.showsCities },
                         set: { newValue in

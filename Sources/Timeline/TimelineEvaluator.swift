@@ -17,11 +17,15 @@ import Foundation
 public struct TimelineEvaluator: Sendable {
 
     public let timeline: Timeline
+    /// Fraction of the camera span given up per second while no keyframe is moving
+    /// it — the slow push-in that keeps a held shot from looking like a still.
+    public let ambientZoomRate: Double
     /// Clips pre-sorted once, so evaluation does no sorting per frame.
     private let ordered: [TimelineItem]
 
-    public init(timeline: Timeline) {
+    public init(timeline: Timeline, ambientZoomRate: Double = 0) {
         self.timeline = timeline
+        self.ambientZoomRate = max(0, ambientZoomRate)
         // Ties are broken by id so the order never depends on how the array was
         // built — two clips starting on the same frame must resolve identically
         // every run.
@@ -47,6 +51,11 @@ public struct TimelineEvaluator: Sendable {
         var texts: [ResolvedText] = []
         var events: [WarEvent] = []
         var camera = timeline.initialCamera
+        var versusCard: ResolvedVersusCard?
+        /// When the camera last stopped being driven by a keyframe. The ambient
+        /// drift is measured from here, so it never fights a scripted move and never
+        /// accumulates across one.
+        var cameraSettledAt: TimeInterval = 0
 
         for item in ordered {
             guard clampedTime >= item.start else { break }  // ordered: nothing later applies
@@ -121,6 +130,7 @@ public struct TimelineEvaluator: Sendable {
 
             case .cameraMove(let target):
                 camera = finished ? target : MapCamera.interpolate(camera, target, progress)
+                cameraSettledAt = min(item.end, clampedTime)
 
             case .showText(let element):
                 guard clampedTime <= item.end || item.duration == 0 else { break }
@@ -132,9 +142,26 @@ public struct TimelineEvaluator: Sendable {
                                                   date: date,
                                                   easing: item.easing))
 
+            case .showVersusCard(let card):
+                guard clampedTime <= item.end || item.duration == 0 else { break }
+                // Fades at both ends rather than snapping on: a card that appears
+                // between two frames reads as a glitch.
+                let fade = 0.18
+                let raw = item.duration > 0 ? progress : 1
+                let opacity = min(min(raw / fade, 1), min((1 - raw) / fade, 1))
+                versusCard = ResolvedVersusCard(card: card, opacity: max(0, opacity))
+
             case .markEvent(let event):
                 events.append(event)
             }
+        }
+
+        // The Ken Burns push-in, applied on top of whatever the keyframes decided so
+        // that it lands in the export as well as the preview.
+        if ambientZoomRate > 0 {
+            let held = max(0, clampedTime - cameraSettledAt)
+            camera.span = max(MapCamera.minimumSpan,
+                              camera.span * pow(1 - ambientZoomRate, held))
         }
 
         return WorldSnapshot(
@@ -147,6 +174,7 @@ public struct TimelineEvaluator: Sendable {
             frontlines: frontlines,
             battles: battles,
             texts: texts,
+            versusCard: versusCard,
             camera: camera,
             recentEvents: events.reversed()
         )

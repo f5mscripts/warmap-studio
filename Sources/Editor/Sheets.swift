@@ -143,7 +143,8 @@ struct ExportSheet: View {
             projection: project.projection,
             preset: resolved,
             audioClips: project.audioClips,
-            audioDirectory: package.map { ProjectStore.shared.audioDirectory(in: $0) }
+            audioDirectory: package.map { ProjectStore.shared.audioDirectory(in: $0) },
+            ambientZoomRate: project.ambientZoomRate
         )
 
         task = Task {
@@ -535,10 +536,34 @@ struct SimulatorSheet: View {
     }
 
     private func apply(_ result: SimulationResult) {
+        // The matchup card goes in front of the war it introduces, which is the
+        // convention these videos use: both sides, their flags and their weight,
+        // held for a couple of seconds before the first border moves.
+        let card = VersusCard(
+            sideAName: coalitionName(sideA, fallback: "Side A"),
+            sideBName: coalitionName(sideB, fallback: "Side B"),
+            sideACountryIDs: sideA,
+            sideBCountryIDs: sideB,
+            sideAStrength: pooledPower(sideA, sideAStrength),
+            sideBStrength: pooledPower(sideB, sideBStrength)
+        )
+        let intro = TimelineItem(title: "Versus card", start: 0, duration: 2.2,
+                                 easing: .easeInOut, action: .showVersusCard(card))
+
         store.apply("Apply Simulation") { project in
+            project.activeTimeline.items.append(intro)
             project.activeTimeline.items.append(contentsOf: result.items)
         }
         dismiss()
+    }
+
+    /// Names the coalition after its largest member, which is what a viewer reads it
+    /// as anyway — "Germany and allies" rather than "Side A".
+    private func coalitionName(_ members: [String], fallback: String) -> String {
+        guard let leader = members.first,
+              let country = store.project.countryIndex[leader] else { return fallback }
+        return members.count > 1 ? "\(country.shortName) + \(members.count - 1)"
+                                 : country.shortName
     }
 }
 

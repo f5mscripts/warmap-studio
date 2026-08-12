@@ -218,7 +218,7 @@ def draw_borders(d, cam, borders, owners, view):
         else:
             if owners.get(a) == owners.get(b):
                 continue  # same power on both sides: not a border at all
-            colour, width = BORDER, 2
+            colour, width = BORDER, 3
         pts = [cam.project(lon, lat) for lon, lat in seg["points"]]
         if len(pts) < 2:
             continue
@@ -254,7 +254,7 @@ def render_map(geometry, borders, territories, cities, cam, owners, size,
             continue
         drawn += 1
         power = owners.get(unit_id)
-        fill = POWERS[power][1] if power in POWERS else NEUTRAL
+        fill = saturated(POWERS[power][1], 0.35) if power in POWERS else NEUTRAL
         draw_unit(d, cam, rings_list, fill)
 
     # Contested territories are repainted on top, clipped to the attacker's advance.
@@ -349,6 +349,15 @@ def quantise_factions(colours_by_id):
         taken.add(chosen)
         result[key] = rgb(chosen)
     return result
+
+
+def saturated(colour, amount):
+    """Mirrors ColorTuning.saturated — pushes a colour away from its own luma."""
+    if amount <= 0:
+        return colour
+    luma = 0.299 * colour[0] + 0.587 * colour[1] + 0.114 * colour[2]
+    return tuple(int(min(max(round(luma + (c - luma) * (1 + amount)), 0), 255))
+                 for c in colour)
 
 
 def pixel_buffer(width, height, short_edge=200):

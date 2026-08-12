@@ -25,6 +25,9 @@ public actor VideoExporter {
         public var audioClips: [AudioClip]
         /// Directory holding the project's imported audio.
         public var audioDirectory: URL?
+        /// The project's ambient camera drift, so the export moves exactly as the
+        /// preview did.
+        public var ambientZoomRate: Double
 
         public init(timeline: Timeline,
                     countries: [String: Country],
@@ -32,7 +35,8 @@ public actor VideoExporter {
                     projection: MapProjectionKind = .mercator,
                     preset: ExportPreset,
                     audioClips: [AudioClip] = [],
-                    audioDirectory: URL? = nil) {
+                    audioDirectory: URL? = nil,
+                    ambientZoomRate: Double = 0) {
             self.timeline = timeline
             self.countries = countries
             self.style = style
@@ -40,6 +44,7 @@ public actor VideoExporter {
             self.preset = preset
             self.audioClips = audioClips
             self.audioDirectory = audioDirectory
+            self.ambientZoomRate = ambientZoomRate
         }
     }
 
@@ -65,7 +70,8 @@ public actor VideoExporter {
         progress(ExportProgress(stage: .preparing, fraction: 0))
 
         let preset = request.preset
-        let evaluator = TimelineEvaluator(timeline: request.timeline)
+        let evaluator = TimelineEvaluator(timeline: request.timeline,
+                                          ambientZoomRate: request.ambientZoomRate)
         let frameTimes = evaluator.frameTimes(fps: preset.fps)
 
         try checkStorage(for: preset, duration: request.timeline.duration)

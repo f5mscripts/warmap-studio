@@ -72,6 +72,8 @@ public enum TimelineAction: Codable, Hashable, Sendable {
     case hideFrontline(frontlineID: UUID)
     case cameraMove(to: MapCamera)
     case showText(TextElement)
+    /// The pre-war matchup card: both coalitions' flags, names and strength bars.
+    case showVersusCard(VersusCard)
     /// Records something on the timeline without changing the map directly.
     case markEvent(WarEvent)
 
@@ -83,7 +85,7 @@ public enum TimelineAction: Codable, Hashable, Sendable {
         case .showBattle: return .effects
         case .showFrontline, .moveFrontline, .hideFrontline: return .frontlines
         case .cameraMove: return .map
-        case .showText: return .text
+        case .showText, .showVersusCard: return .text
         case .markEvent: return .effects
         }
     }
@@ -162,6 +164,8 @@ public struct WorldSnapshot: Sendable {
     public var frontlines: [Frontline]
     public var battles: [BattleMarker]
     public var texts: [ResolvedText]
+    /// The matchup card, if one is on screen at this instant.
+    public var versusCard: ResolvedVersusCard?
     public var camera: MapCamera
     /// Events at or before this instant, most recent first — drives the event list.
     public var recentEvents: [WarEvent]
@@ -175,6 +179,7 @@ public struct WorldSnapshot: Sendable {
                 frontlines: [Frontline] = [],
                 battles: [BattleMarker] = [],
                 texts: [ResolvedText] = [],
+                versusCard: ResolvedVersusCard? = nil,
                 camera: MapCamera = .world,
                 recentEvents: [WarEvent] = []) {
         self.time = time
@@ -186,6 +191,7 @@ public struct WorldSnapshot: Sendable {
         self.frontlines = frontlines
         self.battles = battles
         self.texts = texts
+        self.versusCard = versusCard
         self.camera = camera
         self.recentEvents = recentEvents
     }
@@ -203,6 +209,18 @@ public struct WorldSnapshot: Sendable {
             counts[owner, default: 0] += 1
         }
         return counts
+    }
+}
+
+/// A `VersusCard` resolved for one instant, with its fade applied.
+public struct ResolvedVersusCard: Hashable, Sendable {
+    public var card: VersusCard
+    /// 0…1, so the card can fade in and out rather than snapping on.
+    public var opacity: Double
+
+    public init(card: VersusCard, opacity: Double) {
+        self.card = card
+        self.opacity = opacity
     }
 }
 

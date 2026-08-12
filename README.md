@@ -20,6 +20,7 @@ analytics, no advertising and no tracking, and works entirely offline.
 | **Pixel-art mode** | A retro-game style: the whole frame rendered into a ~200-pixel buffer on a 24-colour palette and blown up without smoothing, with sprite unit counters and battle markers |
 | **Countries** | Empires, kingdoms, republics, colonies, puppets and occupied zones, with lifetimes — extinct polities vanish from the picker outside their own era |
 | **Flags** | Drawn procedurally, resolved by date: Germany flies a different flag in 1914, 1925 and 1940 |
+| **Presentation** | Saturated fills and heavy borders, flag badges beside country names, a pre-war "VS" card with both coalitions' flags and strength bars, and a slow Ken Burns push-in so a held shot never reads as a still |
 | **Timeline** | Eight tracks, draggable clips, a BC-capable date ruler, playback with speed control and looping |
 | **Simulation** | Front-based attrition with morale, supply, multi-front penalties and capitulation, driven by a seeded generator so a war replays identically |
 | **Units** | 31 formation types — riflemen to jet fighters, light tanks to carriers — drawn as pixel sprites with the owner's flag, offered only in the periods they existed, and placeable at sea if they fly or float |

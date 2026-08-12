@@ -615,6 +615,47 @@ public enum VictoryCondition: Codable, Hashable, Sendable {
     case capitulationOf(String)
 }
 
+/// The card shown before a war starts: who is fighting whom, and how they compare.
+///
+/// Held for a couple of seconds over the map, which is the convention these videos
+/// use to set up a matchup before any border moves.
+public struct VersusCard: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var sideAName: String
+    public var sideBName: String
+    /// Members in display order. The first few flags are drawn; the rest are counted.
+    public var sideACountryIDs: [String]
+    public var sideBCountryIDs: [String]
+    /// Pooled strengths, in the same units for both sides. The bars are drawn
+    /// relative to the larger of the two, so only their ratio matters.
+    public var sideAStrength: Double
+    public var sideBStrength: Double
+
+    public init(id: UUID = UUID(),
+                sideAName: String,
+                sideBName: String,
+                sideACountryIDs: [String] = [],
+                sideBCountryIDs: [String] = [],
+                sideAStrength: Double = 1,
+                sideBStrength: Double = 1) {
+        self.id = id
+        self.sideAName = sideAName
+        self.sideBName = sideBName
+        self.sideACountryIDs = sideACountryIDs
+        self.sideBCountryIDs = sideBCountryIDs
+        self.sideAStrength = max(0, sideAStrength)
+        self.sideBStrength = max(0, sideBStrength)
+    }
+
+    /// Bar lengths as fractions of the longer side, so the stronger coalition always
+    /// fills its bar and the weaker one shows how far behind it is.
+    public var barFractions: (a: Double, b: Double) {
+        let largest = max(sideAStrength, sideBStrength)
+        guard largest > 0 else { return (0, 0) }
+        return (sideAStrength / largest, sideBStrength / largest)
+    }
+}
+
 /// A war: participants, timespan, and everything that happens inside it.
 public struct War: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID

@@ -54,6 +54,9 @@ public struct WarMapProject: Identifiable, Codable, Hashable, Sendable {
     public var renderStyle: MapRenderStyle
     public var exportPreset: ExportPreset
     public var dateFormat: HistoricalDate.Format
+    /// Fraction of the camera span given up per second between keyframes — the slow
+    /// push-in that stops a held shot reading as a still frame. 0 turns it off.
+    public var ambientZoomRate: Double
 
     /// The original, historical timeline. Branches never modify it.
     public var timeline: Timeline
@@ -74,6 +77,7 @@ public struct WarMapProject: Identifiable, Codable, Hashable, Sendable {
                 renderStyle: MapRenderStyle? = nil,
                 exportPreset: ExportPreset = .tiktok,
                 dateFormat: HistoricalDate.Format = .dayMonthNameYear,
+                ambientZoomRate: Double = 0.012,
                 timeline: Timeline,
                 countries: [Country] = [],
                 wars: [War] = [],
@@ -93,6 +97,7 @@ public struct WarMapProject: Identifiable, Codable, Hashable, Sendable {
         self.renderStyle = renderStyle ?? .preset(mapStyle)
         self.exportPreset = exportPreset
         self.dateFormat = dateFormat
+        self.ambientZoomRate = ambientZoomRate
         self.timeline = timeline
         self.countries = countries
         self.wars = wars
@@ -126,6 +131,7 @@ public struct WarMapProject: Identifiable, Codable, Hashable, Sendable {
         exportPreset = try c.decodeIfPresent(ExportPreset.self, forKey: .exportPreset) ?? .tiktok
         dateFormat = try c.decodeIfPresent(HistoricalDate.Format.self, forKey: .dateFormat)
             ?? .dayMonthNameYear
+        ambientZoomRate = try c.decodeIfPresent(Double.self, forKey: .ambientZoomRate) ?? 0.012
         timeline = try c.decode(Timeline.self, forKey: .timeline)
         countries = try c.decodeIfPresent([Country].self, forKey: .countries) ?? []
         wars = try c.decodeIfPresent([War].self, forKey: .wars) ?? []

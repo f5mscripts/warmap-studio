@@ -100,7 +100,9 @@ struct EditorScreen: View {
     private var timeline: Timeline { store.project.activeTimeline }
 
     private var snapshot: WorldSnapshot {
-        TimelineEvaluator(timeline: timeline).snapshot(at: playback.time)
+        TimelineEvaluator(timeline: timeline,
+                          ambientZoomRate: store.project.ambientZoomRate)
+            .snapshot(at: playback.time)
     }
 
     var body: some View {

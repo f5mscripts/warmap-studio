@@ -42,7 +42,26 @@ render path in `MapSceneRenderer` that:
 Keep the existing styles. `pixel` is an additional option in the style picker, and
 should become the default for new projects if the user prefers it.
 
-## 2. The other visual gaps (all confirmed)
+## 2. The other visual gaps (all confirmed)  — **DONE**
+
+* Fills are pushed towards saturation (`fillSaturationBoost`, 0.35 on the bold
+  styles, 0 on pixel because the palette is already there), borders are thicker, and
+  the advancing edge is `contestedHighlight` 0.45 over `contestedEdgeWidth` 5.
+* Flag badges are drawn beside country labels wherever the label is big enough for
+  the badge not to be a smudge, and are part of the collision box so they never land
+  on a neighbour's name. `showsFlags` is on in every preset and toggleable in the
+  inspector.
+* `.showVersusCard(VersusCard)` is a new `TimelineAction`, resolved by the evaluator
+  with a fade at both ends and drawn as a full-frame overlay. Applying a simulation
+  puts one in front of the war it introduces. Layout is in viewport fractions, so it
+  composes at 9:16, 16:9 and in the editor pane.
+* `WarMapProject.ambientZoomRate` (default 0.012) drives a Ken Burns push-in applied
+  in `TimelineEvaluator` on top of the interpolated camera, so it lands in the export
+  too. A camera keyframe resets the drift rather than fighting it.
+* `TextStyle.title` is 84pt/900 with an outline; entry and exit fractions drop from
+  0.25/0.15 to 0.12/0.10, so a caption is readable a fifth of the way in.
+
+The original brief follows, for reference.
 
 * **Borders/fills too plain** — bolder saturated fills, thicker borders, and a
   brighter glow along the advancing edge during a capture. `contestedHighlight`
