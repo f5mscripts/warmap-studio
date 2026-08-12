@@ -505,8 +505,11 @@ struct EditorScreen: View {
             )
 
         case .flag, .city, .arrow:
-            // These place an element via the inspector, which needs a selection first.
-            selectedCountryID = snapshot.ownership[unitID]
+            // These place an element via the inspector, which needs a selection
+            // first. A tap on open sea selects nothing rather than clearing it.
+            if let unitID, let owner = snapshot.ownership[unitID] {
+                selectedCountryID = owner
+            }
             if sizeClass == .compact { showsInspector = true }
 
         case .eraser:
