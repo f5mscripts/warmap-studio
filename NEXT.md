@@ -12,8 +12,8 @@ so "always start in Pixel Art" holds. Preview it without a device with
 `python3 Tools/preview_reference.py` → `Tools/out/04_pixel_sprites.png`,
 `05_pixel_europe_1939.png`, `06_pixel_invasion.png`.
 
-What is left for section 4: the sprite set covers today's nine `ArmyIcon` cases only.
-Widening `ArmyIcon` means adding art to `PixelSprite.army(_:)` and nothing else.
+Section 4 built on this: widening `ArmyIcon` needed art in `PixelSprite.army(_:)`
+and nothing else in the renderer.
 
 The original brief follows, for reference.
 
