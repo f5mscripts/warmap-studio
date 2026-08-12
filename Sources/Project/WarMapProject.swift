@@ -209,8 +209,8 @@ public struct WarMapProject: Identifiable, Codable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case formatVersion, id, name, subtitle, createdAt, modifiedAt, era, mapRegionID,
-             projection, mapStyle, renderStyle, exportPreset, dateFormat, timeline,
-             countries, wars, audioClips, branches, activeBranchID
+             projection, mapStyle, renderStyle, exportPreset, dateFormat, ambientZoomRate,
+             timeline, countries, wars, audioClips, branches, activeBranchID
     }
 }
 
