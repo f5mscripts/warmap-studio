@@ -127,10 +127,13 @@ struct EditorScreen: View {
 
             Divider().overlay(Theme.Palette.rule)
             TimelineView(store: store, playback: playback, selectedItemID: $selectedItemID)
-                .frame(height: Theme.Metric.timelineHeight)
+                .frame(height: sizeClass == .regular
+                       ? Theme.Metric.timelineHeight
+                       : Theme.Metric.timelineHeight * 0.75)
         }
         .background(Theme.Palette.charcoal)
         .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             playback.duration = timeline.duration
         }
@@ -188,46 +191,96 @@ struct EditorScreen: View {
                     .font(Theme.Font.ui(14, weight: .semibold))
                     .foregroundStyle(Theme.Palette.textPrimary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Text(store.project.activeBranchName)
                     .font(Theme.Font.caption)
                     .foregroundStyle(store.project.activeBranchID == nil
                                      ? Theme.Palette.textTertiary : Theme.Palette.gold)
                     .lineLimit(1)
             }
+            .layoutPriority(1)
 
-            Spacer(minLength: Theme.Metric.gutterTight)
+            Spacer(minLength: 4)
 
-            SaveIndicator(state: store.saveState)
-
-            IconButton(systemName: "arrow.uturn.backward", label: "Undo",
-                       tint: store.canUndo ? Theme.Palette.textSecondary : Theme.Palette.textTertiary) {
-                store.undo()
+            if sizeClass == .regular {
+                regularActions
+            } else {
+                compactActions
             }
-            .disabled(!store.canUndo)
-
-            IconButton(systemName: "arrow.uturn.forward", label: "Redo",
-                       tint: store.canRedo ? Theme.Palette.textSecondary : Theme.Palette.textTertiary) {
-                store.redo()
-            }
-            .disabled(!store.canRedo)
-
-            IconButton(systemName: "arrow.triangle.branch", label: "Alternate timelines") {
-                showsBranches = true
-            }
-            IconButton(systemName: "wand.and.stars", label: "Auto simulate war") {
-                showsSimulator = true
-            }
-            IconButton(systemName: "sidebar.right", label: "Inspector",
-                       isActive: showsInspector) {
-                showsInspector.toggle()
-            }
-
-            Button("Export") { showsExport = true }
-                .buttonStyle(GoldButtonStyle())
         }
         .padding(.horizontal, Theme.Metric.gutterTight)
         .frame(height: Theme.Metric.toolbarHeight)
         .background(Theme.Palette.abyss)
+    }
+
+    /// Everything laid out flat, for iPad and landscape where there is room.
+    @ViewBuilder
+    private var regularActions: some View {
+        SaveIndicator(state: store.saveState)
+
+        IconButton(systemName: "arrow.uturn.backward", label: "Undo",
+                   tint: store.canUndo ? Theme.Palette.textSecondary : Theme.Palette.textTertiary) {
+            store.undo()
+        }
+        .disabled(!store.canUndo)
+
+        IconButton(systemName: "arrow.uturn.forward", label: "Redo",
+                   tint: store.canRedo ? Theme.Palette.textSecondary : Theme.Palette.textTertiary) {
+            store.redo()
+        }
+        .disabled(!store.canRedo)
+
+        IconButton(systemName: "arrow.triangle.branch", label: "Alternate timelines") {
+            showsBranches = true
+        }
+        IconButton(systemName: "wand.and.stars", label: "Auto simulate war") {
+            showsSimulator = true
+        }
+        IconButton(systemName: "sidebar.right", label: "Inspector",
+                   isActive: showsInspector) {
+            showsInspector.toggle()
+        }
+
+        Button("Export") { showsExport = true }
+            .buttonStyle(GoldButtonStyle())
+    }
+
+    /// On iPhone the flat row needs about 450pt of controls in roughly 390pt of
+    /// screen, which pushes the back button off the leading edge and strands the
+    /// user in the editor. Everything except undo collapses into a menu.
+    @ViewBuilder
+    private var compactActions: some View {
+        IconButton(systemName: "arrow.uturn.backward", label: "Undo",
+                   tint: store.canUndo ? Theme.Palette.textSecondary : Theme.Palette.textTertiary) {
+            store.undo()
+        }
+        .disabled(!store.canUndo)
+
+        Menu {
+            Button("Redo", systemImage: "arrow.uturn.forward") { store.redo() }
+                .disabled(!store.canRedo)
+            Divider()
+            Button("Inspector", systemImage: "sidebar.right") { showsInspector = true }
+            Button("Alternate timelines", systemImage: "arrow.triangle.branch") {
+                showsBranches = true
+            }
+            Button("Auto simulate war", systemImage: "wand.and.stars") {
+                showsSimulator = true
+            }
+            Divider()
+            Button("Export video", systemImage: "square.and.arrow.up") { showsExport = true }
+            Divider()
+            Text(store.saveState.label)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 17, weight: .semibold))
+                .frame(width: 34, height: 34)
+                .foregroundStyle(Theme.Palette.textSecondary)
+        }
+        .accessibilityLabel("More actions")
+
+        Button("Export") { showsExport = true }
+            .buttonStyle(GoldButtonStyle())
     }
 
     // MARK: - Tools
