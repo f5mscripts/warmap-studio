@@ -235,17 +235,26 @@ final class PixelStyleTests: XCTestCase {
         let bitmap = try render(style: pixelStyleWithoutText(), side: side)
         let scale = 2  // 400 / 200
 
-        for y in stride(from: 0, to: side, by: scale) {
+        // Scanned first and asserted once: a per-pixel XCTAssert over 160,000 pixels
+        // costs more than the render it is checking.
+        var brokenBlock: String?
+        scan: for y in stride(from: 0, to: side, by: scale) {
             for x in stride(from: 0, to: side, by: scale) {
                 let reference = bitmap.color(x: x, y: y)
-                for dy in 0..<scale where y + dy < side {
-                    for dx in 0..<scale where x + dx < side {
-                        XCTAssertEqual(bitmap.color(x: x + dx, y: y + dy), reference,
-                                       "pixel (\(x + dx), \(y + dy)) broke its block")
+                for dy in 0..<scale {
+                    for dx in 0..<scale {
+                        let column = x + dx
+                        let row = y + dy
+                        guard column < side, row < side else { continue }
+                        if bitmap.color(x: column, y: row) != reference {
+                            brokenBlock = "pixel (\(column), \(row)) differs from the block at (\(x), \(y))"
+                            break scan
+                        }
                     }
                 }
             }
         }
+        XCTAssertNil(brokenBlock, brokenBlock ?? "")
 
         // Territory fills, sea and ink only — no anti-aliased in-between shades.
         XCTAssertLessThanOrEqual(bitmap.distinctColors.count, PixelPalette.all.count,
