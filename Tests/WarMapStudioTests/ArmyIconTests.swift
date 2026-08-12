@@ -70,10 +70,13 @@ final class ArmyIconTests: XCTestCase {
 
     // MARK: - Movement
 
+    /// Speeds are kilometres covered per *day*, not top speed, so the ordering only
+    /// holds within a domain: a destroyer steams around the clock and covers more
+    /// ground in a day than a helicopter flying sorties from a base.
     func testSpeedsAreOrderedTheWayTheRealThingsAre() {
         XCTAssertGreaterThan(ArmyIcon.jetFighter.baseSpeed, ArmyIcon.fighter.baseSpeed)
         XCTAssertGreaterThan(ArmyIcon.fighter.baseSpeed, ArmyIcon.helicopter.baseSpeed)
-        XCTAssertGreaterThan(ArmyIcon.helicopter.baseSpeed, ArmyIcon.destroyer.baseSpeed)
+        XCTAssertGreaterThan(ArmyIcon.destroyer.baseSpeed, ArmyIcon.submarine.baseSpeed)
         XCTAssertGreaterThan(ArmyIcon.lightTank.baseSpeed, ArmyIcon.heavyTank.baseSpeed)
         XCTAssertGreaterThan(ArmyIcon.cavalry.baseSpeed, ArmyIcon.infantry.baseSpeed)
         XCTAssertGreaterThan(ArmyIcon.infantry.baseSpeed, ArmyIcon.howitzer.baseSpeed)
