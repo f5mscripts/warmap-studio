@@ -3,54 +3,232 @@ import Foundation
 
 // MARK: - Armies
 
-/// The symbol drawn for an army on the map.
-public enum ArmyIcon: String, Codable, CaseIterable, Sendable, Identifiable {
-    case infantry, armour, cavalry, airborne, marine, artillery, fleet, airForce, partisan
+/// What a formation is made of. Groups the picker and decides where a unit may be
+/// placed.
+public enum ArmyCategory: String, Codable, CaseIterable, Sendable, Identifiable {
+    case infantry, armour, artillery, aircraft, naval
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
         case .infantry: return "Infantry"
-        case .armour: return "Armoured"
-        case .cavalry: return "Cavalry"
-        case .airborne: return "Airborne"
-        case .marine: return "Marine"
+        case .armour: return "Armour"
         case .artillery: return "Artillery"
-        case .fleet: return "Fleet"
+        case .aircraft: return "Aircraft"
+        case .naval: return "Naval"
+        }
+    }
+}
+
+/// Where a formation can stand.
+public enum ArmyDomain: String, Codable, Sendable {
+    case land, air, sea
+}
+
+/// The symbol drawn for an army on the map.
+///
+/// Cases are never renamed or removed: the raw value is what a saved project stores,
+/// so `infantry` stays `infantry` even now that `rifleman` would read better. New
+/// types are added alongside, each with its own sprite in `PixelSprite.army(_:)` and
+/// its own span of history — a jet fighter must not be offered in a 1914 project.
+public enum ArmyIcon: String, Codable, CaseIterable, Sendable, Identifiable {
+    // Infantry
+    case infantry, machineGun, airborne, marine, partisan, cavalry
+    // Armour
+    case armour, lightTank, heavyTank, tankDestroyer, armouredCar
+    // Artillery
+    case artillery, howitzer, rocketArtillery, antiAir
+    // Aircraft
+    case airForce, fighter, bomber, diveBomber, heavyBomber
+    case transportPlane, reconnaissance, helicopter, jetFighter
+    // Naval
+    case fleet, destroyer, cruiser, battleship, carrier, submarine, transportShip
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .infantry: return "Infantry"
+        case .machineGun: return "Machine Gun"
+        case .airborne: return "Paratroopers"
+        case .marine: return "Marines"
+        case .partisan: return "Partisans"
+        case .cavalry: return "Cavalry"
+        case .armour: return "Armoured"
+        case .lightTank: return "Light Tank"
+        case .heavyTank: return "Heavy Tank"
+        case .tankDestroyer: return "Tank Destroyer"
+        case .armouredCar: return "Armoured Car"
+        case .artillery: return "Artillery"
+        case .howitzer: return "Howitzer"
+        case .rocketArtillery: return "Rocket Artillery"
+        case .antiAir: return "Anti-Aircraft"
         case .airForce: return "Air Force"
-        case .partisan: return "Partisan"
+        case .fighter: return "Fighter"
+        case .bomber: return "Bomber"
+        case .diveBomber: return "Dive Bomber"
+        case .heavyBomber: return "Heavy Bomber"
+        case .transportPlane: return "Air Transport"
+        case .reconnaissance: return "Reconnaissance"
+        case .helicopter: return "Helicopter"
+        case .jetFighter: return "Jet Fighter"
+        case .fleet: return "Fleet"
+        case .destroyer: return "Destroyer"
+        case .cruiser: return "Cruiser"
+        case .battleship: return "Battleship"
+        case .carrier: return "Carrier"
+        case .submarine: return "Submarine"
+        case .transportShip: return "Troop Transport"
         }
     }
 
+    public var category: ArmyCategory {
+        switch self {
+        case .infantry, .machineGun, .airborne, .marine, .partisan, .cavalry:
+            return .infantry
+        case .armour, .lightTank, .heavyTank, .tankDestroyer, .armouredCar:
+            return .armour
+        case .artillery, .howitzer, .rocketArtillery, .antiAir:
+            return .artillery
+        case .airForce, .fighter, .bomber, .diveBomber, .heavyBomber,
+             .transportPlane, .reconnaissance, .helicopter, .jetFighter:
+            return .aircraft
+        case .fleet, .destroyer, .cruiser, .battleship, .carrier, .submarine,
+             .transportShip:
+            return .naval
+        }
+    }
+
+    /// Aircraft fly and ships float, so both can be placed over open sea. Everything
+    /// else needs land under it.
+    public var domain: ArmyDomain {
+        switch category {
+        case .aircraft: return .air
+        case .naval: return .sea
+        case .infantry, .armour, .artillery: return .land
+        }
+    }
+
+    public var canBePlacedAtSea: Bool { domain != .land }
+
     /// Kilometres per day on open ground before terrain and supply modifiers.
+    ///
+    /// The simulator uses these directly, so they are ordered the way the real things
+    /// are: a jet is not a rifleman, and a howitzer is slower than the infantry it
+    /// supports.
     public var baseSpeed: Double {
         switch self {
         case .infantry: return 20
-        case .armour: return 45
-        case .cavalry: return 35
+        case .machineGun: return 16
         case .airborne: return 120
         case .marine: return 22
-        case .artillery: return 12
-        case .fleet: return 300
-        case .airForce: return 600
         case .partisan: return 15
+        case .cavalry: return 35
+        case .armour: return 45
+        case .lightTank: return 55
+        case .heavyTank: return 30
+        case .tankDestroyer: return 40
+        case .armouredCar: return 70
+        case .artillery: return 12
+        case .howitzer: return 10
+        case .rocketArtillery: return 25
+        case .antiAir: return 20
+        case .airForce: return 600
+        case .fighter: return 700
+        case .bomber: return 500
+        case .diveBomber: return 450
+        case .heavyBomber: return 550
+        case .transportPlane: return 400
+        case .reconnaissance: return 650
+        case .helicopter: return 250
+        case .jetFighter: return 1_100
+        case .fleet: return 300
+        case .destroyer: return 400
+        case .cruiser: return 380
+        case .battleship: return 320
+        case .carrier: return 350
+        case .submarine: return 200
+        case .transportShip: return 250
         }
     }
 
-    /// SF Symbols name used for the marker glyph.
+    /// SF Symbols name, used by the pickers rather than the map.
     public var symbolName: String {
         switch self {
         case .infantry: return "figure.walk"
-        case .armour: return "shield.lefthalf.filled"
-        case .cavalry: return "hare.fill"
+        case .machineGun: return "scope"
         case .airborne: return "parachute.fill"
         case .marine: return "water.waves"
-        case .artillery: return "scope"
-        case .fleet: return "ferry.fill"
-        case .airForce: return "airplane"
         case .partisan: return "person.3.fill"
+        case .cavalry: return "hare.fill"
+        case .armour, .lightTank, .heavyTank, .tankDestroyer:
+            return "shield.lefthalf.filled"
+        case .armouredCar: return "car.fill"
+        case .artillery, .howitzer: return "scope"
+        case .rocketArtillery: return "flame.fill"
+        case .antiAir: return "arrow.up.to.line"
+        case .airForce, .fighter, .bomber, .diveBomber, .heavyBomber,
+             .transportPlane, .reconnaissance:
+            return "airplane"
+        case .helicopter: return "fanblades.fill"
+        case .jetFighter: return "paperplane.fill"
+        case .fleet, .destroyer, .cruiser, .battleship, .transportShip:
+            return "ferry.fill"
+        case .carrier: return "square.stack.3d.up.fill"
+        case .submarine: return "arrow.down.to.line"
         }
+    }
+
+    // MARK: - History
+
+    /// Roughly when this kind of unit existed.
+    ///
+    /// Resolved the same way `Country.flag(on:)` resolves flags: the picker asks the
+    /// project's own date what it may offer, so a 1914 scenario is never handed a
+    /// helicopter. The generic types span all of history because a project written
+    /// before this existed may already use them at any date.
+    public var availability: HistoricalInterval {
+        func span(_ from: Int, _ to: Int = 2100) -> HistoricalInterval {
+            HistoricalInterval(start: HistoricalDate(year: from), end: HistoricalDate(year: to))
+        }
+        switch self {
+        case .infantry, .cavalry, .marine, .partisan, .artillery, .fleet, .airForce,
+             .armour:
+            return span(-3000)
+        case .machineGun: return span(1884)
+        case .airborne: return span(1936)
+        case .lightTank: return span(1916, 1960)
+        case .heavyTank: return span(1938, 1980)
+        case .tankDestroyer: return span(1939, 1975)
+        case .armouredCar: return span(1902)
+        case .howitzer: return span(1500)
+        case .rocketArtillery: return span(1939)
+        case .antiAir: return span(1914)
+        case .fighter: return span(1915)
+        case .bomber: return span(1915)
+        case .diveBomber: return span(1930, 1955)
+        case .heavyBomber: return span(1935)
+        case .transportPlane: return span(1930)
+        case .reconnaissance: return span(1914)
+        case .helicopter: return span(1942)
+        case .jetFighter: return span(1944)
+        case .destroyer: return span(1893)
+        case .cruiser: return span(1860)
+        case .battleship: return span(1860, 1965)
+        case .carrier: return span(1918)
+        case .submarine: return span(1900)
+        case .transportShip: return span(-3000)
+        }
+    }
+
+    public func isAvailable(on date: HistoricalDate) -> Bool {
+        availability.contains(date)
+    }
+
+    /// Everything a project set at this date may use, in catalogue order.
+    public static func available(on date: HistoricalDate) -> [ArmyIcon] {
+        allCases.filter { $0.isAvailable(on: date) }
     }
 }
 

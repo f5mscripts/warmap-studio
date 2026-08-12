@@ -22,6 +22,7 @@ analytics, no advertising and no tracking, and works entirely offline.
 | **Flags** | Drawn procedurally, resolved by date: Germany flies a different flag in 1914, 1925 and 1940 |
 | **Timeline** | Eight tracks, draggable clips, a BC-capable date ruler, playback with speed control and looping |
 | **Simulation** | Front-based attrition with morale, supply, multi-front penalties and capitulation, driven by a seeded generator so a war replays identically |
+| **Units** | 31 formation types — riflemen to jet fighters, light tanks to carriers — drawn as pixel sprites with the owner's flag, offered only in the periods they existed, and placeable at sea if they fly or float |
 | **Coalitions** | Pick every country on both sides by hand, watch each side's pooled strength as you build it, and let a per-war luck roll give the underdog a real chance — about one war in four |
 | **Export** | H.264/HEVC MP4 at TikTok/Shorts 9:16, YouTube 16:9, square, or custom, with mixed audio |
 | **Projects** | `.warmap` packages with autosave, undo/redo, duplication, import/export, and alternate-history branching |

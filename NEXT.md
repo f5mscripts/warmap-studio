@@ -119,7 +119,19 @@ than hoping.
   iOS device. For the pixel style this is essential — it is much faster than
   waiting on CI to see whether the look is right.
 
-## 4. Unit sprites: flags, soldiers, planes, tanks  (user request, Arabic)
+## 4. Unit sprites: flags, soldiers, planes, tanks  (user request, Arabic)  — **DONE**
+
+`ArmyIcon` now has 31 types across five categories, each with its own 12x12 sprite in
+`PixelSprite.army(_:)`, its own `HistoricalInterval` (the picker filters by the
+project's date, so no jets in 1914), and a speed that matches what it is. The owner's
+flag is drawn beside every counter in both render paths. `MapCanvasView` now reports
+open sea as `nil` instead of snapping to whichever country's bounding box covered the
+water, so aircraft and ships can be placed at sea while ground units cannot.
+
+The original nine raw values are untouched — renaming `infantry` to `rifleman` would
+read better and would break every saved project.
+
+The original brief follows, for reference.
 
 > "لا تنسى تضيف اعلام وجنود و طائرات و جميع انواع الطائرات و الدبابات"
 > — don't forget to add flags, soldiers, planes (all types of planes), and tanks.

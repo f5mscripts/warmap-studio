@@ -181,8 +181,8 @@ public final class MapSceneRenderer {
 
         // 7. Armies.
         for army in snapshot.armies {
-            drawArmy(army, countries: countries, style: style, transform: transform,
-                     pixel: pixel, context: context)
+            drawArmy(army, countries: countries, date: snapshot.date, style: style,
+                     transform: transform, pixel: pixel, context: context)
         }
 
         // 8. Battle markers.
@@ -705,15 +705,20 @@ public final class MapSceneRenderer {
 
     private func drawArmy(_ army: Army,
                           countries: [String: Country],
+                          date: HistoricalDate,
                           style: MapRenderStyle,
                           transform: MapTransform,
                           pixel: PixelPass?,
                           context: CGContext) {
         let point = transform.point(for: army.position)
         let tint = colorCache[army.countryID] ?? color(style.neutralLandHex)
+        // Resolved for the project's date, so a German formation in 1943 does not fly
+        // the 1919 flag.
+        let flag = countries[army.countryID]?.flag(on: date)?.spec
 
         if pixel != nil {
-            drawPixelArmy(army, at: point, tint: tint, style: style, context: context)
+            drawPixelArmy(army, at: point, tint: tint, flag: flag, style: style,
+                          context: context)
             return
         }
 
@@ -736,6 +741,15 @@ public final class MapSceneRenderer {
                          fontSize: 11, weight: 800, usesSerif: false,
                          color: CGColor(red: 1, green: 1, blue: 1, alpha: 0.95),
                          outline: nil, outlineWidth: 0, context: context)
+
+        // Flag badge alongside, so a counter says who as well as what.
+        if let flag {
+            let badge = CGRect(x: box.maxX + 3, y: box.minY + 3, width: 15, height: 10)
+            FlagRenderer.draw(flag, in: badge, context: context)
+            context.setStrokeColor(color(style.labelOutlineHex))
+            context.setLineWidth(1)
+            context.stroke(badge)
+        }
         context.restoreGState()
     }
 
@@ -747,6 +761,7 @@ public final class MapSceneRenderer {
     private func drawPixelArmy(_ army: Army,
                                at point: CGPoint,
                                tint: CGColor,
+                               flag: FlagSpec?,
                                style: MapRenderStyle,
                                context: CGContext) {
         let sprite = PixelSprite.army(army.icon)
@@ -755,6 +770,17 @@ public final class MapSceneRenderer {
 
         context.saveGState()
         drawSprite(sprite, at: origin, cell: 1, body: tint, style: style, context: context)
+
+        // Flag badge beside the sprite: seven by five buffer pixels, which survives
+        // the upscale as a readable little banner rather than a smear, with an ink
+        // border so it reads against both land and sea.
+        if let flag {
+            let badge = PixelGrid.snap(CGRect(x: origin.x + CGFloat(sprite.width) + 1,
+                                              y: origin.y + 1, width: 7, height: 5))
+            context.setFillColor(color(style.labelOutlineHex))
+            context.fill(badge.insetBy(dx: -1, dy: -1))
+            FlagRenderer.draw(flag, in: badge, context: context)
+        }
 
         let full = CGFloat(sprite.width) - 2
         let bar = CGRect(x: origin.x + 1, y: origin.y + CGFloat(sprite.height),
@@ -930,18 +956,41 @@ private struct PixelPass {
 }
 
 extension ArmyIcon {
-    /// Two-letter code drawn inside the unit counter.
+    /// Three-letter code drawn inside the counter in the non-pixel styles, where the
+    /// NATO-style box is still what gets drawn.
     public var abbreviation: String {
         switch self {
         case .infantry: return "INF"
-        case .armour: return "ARM"
-        case .cavalry: return "CAV"
+        case .machineGun: return "MG"
         case .airborne: return "ABN"
         case .marine: return "MAR"
-        case .artillery: return "ART"
-        case .fleet: return "FLT"
-        case .airForce: return "AIR"
         case .partisan: return "PAR"
+        case .cavalry: return "CAV"
+        case .armour: return "ARM"
+        case .lightTank: return "LTK"
+        case .heavyTank: return "HVY"
+        case .tankDestroyer: return "TD"
+        case .armouredCar: return "CAR"
+        case .artillery: return "ART"
+        case .howitzer: return "HOW"
+        case .rocketArtillery: return "RKT"
+        case .antiAir: return "AA"
+        case .airForce: return "AIR"
+        case .fighter: return "FTR"
+        case .bomber: return "BMR"
+        case .diveBomber: return "DIV"
+        case .heavyBomber: return "HBR"
+        case .transportPlane: return "TRA"
+        case .reconnaissance: return "REC"
+        case .helicopter: return "HEL"
+        case .jetFighter: return "JET"
+        case .fleet: return "FLT"
+        case .destroyer: return "DD"
+        case .cruiser: return "CA"
+        case .battleship: return "BB"
+        case .carrier: return "CV"
+        case .submarine: return "SUB"
+        case .transportShip: return "TRP"
         }
     }
 }

@@ -15,8 +15,9 @@ struct MapCanvasView: View {
     var allowsInteraction: Bool = true
     /// Camera the user has panned to, overriding the snapshot's.
     @Binding var interactiveCamera: MapCamera?
-    /// Reports a tap on a territory, for the select and paint tools.
-    var onTapTerritory: ((String, GeoCoordinate) -> Void)?
+    /// Reports a tap on the map. The unit id is nil for open sea, which is what
+    /// lets a fleet or an air wing be placed where there is no land.
+    var onTapMap: ((String?, GeoCoordinate) -> Void)?
 
     @State private var renderer = MapSceneRenderer()
     @State private var gestureAnchor: MapCamera?
@@ -78,11 +79,9 @@ struct MapCanvasView: View {
             .gesture(magnifyGesture,
                      including: allowsInteraction ? .all : .subviews)
             .onTapGesture { location in
-                guard let onTapTerritory else { return }
+                guard let onTapMap else { return }
                 let coordinate = transform.coordinate(for: location)
-                if let unit = territory(at: coordinate) {
-                    onTapTerritory(unit, coordinate)
-                }
+                onTapMap(territory(at: coordinate), coordinate)
             }
         }
     }
@@ -123,10 +122,16 @@ struct MapCanvasView: View {
             .onEnded { _ in gestureAnchor = nil }
     }
 
-    /// Finds which territory a coordinate falls in.
+    /// Finds which territory a coordinate falls in, or nil for open sea.
     ///
-    /// Uses the bounding box to narrow the field, then an exact point-in-polygon
-    /// test — a bounding-box-only hit would pick Russia for half of Europe.
+    /// Bounding boxes narrow the field and an exact point-in-polygon test decides —
+    /// a box-only hit would pick Russia for half of Europe. The one concession is
+    /// for islands small enough that simplification has pulled their outline away
+    /// from where they are drawn; for those, and only those, the box is accepted.
+    ///
+    /// Everything else returns nil rather than snapping to whichever country's box
+    /// happens to cover that stretch of water. Norway's box reaches most of the
+    /// Norwegian Sea, and a destroyer dropped there belongs at sea, not in Norway.
     private func territory(at coordinate: GeoCoordinate) -> String? {
         guard let units = try? MapLibrary.shared.units(),
               let geometry = try? MapLibrary.shared.geometry(lod: .medium) else { return nil }
@@ -143,8 +148,14 @@ struct MapCanvasView: View {
                 }
             }
         }
-        // Smallest containing box is a decent fallback for islands the simplified
-        // outline has shrunk away from the tap.
-        return candidates.min(by: { $0.area < $1.area })?.id
+        let islands = candidates.filter { unit in
+            unit.bounds.maxLongitude - unit.bounds.minLongitude < Self.islandSpan
+                && unit.bounds.maxLatitude - unit.bounds.minLatitude < Self.islandSpan
+        }
+        return islands.min(by: { $0.area < $1.area })?.id
     }
+
+    /// How wide a territory's box may be, in degrees, before it stops counting as a
+    /// small island that the polygon test can reasonably miss.
+    private static let islandSpan: Double = 2
 }

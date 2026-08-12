@@ -88,6 +88,9 @@ struct EditorScreen: View {
     @State private var showsSimulator = false
     @State private var showsBranches = false
     @State private var frontlineDraft: [GeoCoordinate] = []
+    /// What the Army tool places. Filtered by the project's date, so a 1914 scenario
+    /// is never offered a jet.
+    @State private var armyType: ArmyIcon = .infantry
     @State private var errorMessage: String?
 
     init(project: WarMapProject) {
@@ -327,9 +330,10 @@ struct EditorScreen: View {
                           countries: store.project.countryIndex,
                           allowsInteraction: !playback.isPlaying,
                           interactiveCamera: $interactiveCamera,
-                          onTapTerritory: handleTap)
+                          onTapMap: handleTap)
 
             VStack(spacing: 6) {
+                if tool == .army { armyTypePicker }
                 if !frontlineDraft.isEmpty {
                     HStack(spacing: 8) {
                         Text("\(frontlineDraft.count) points")
@@ -374,6 +378,45 @@ struct EditorScreen: View {
         }
     }
 
+    /// The unit types this project's date allows, grouped by what they are.
+    private var availableArmyTypes: [ArmyIcon] {
+        ArmyIcon.available(on: timeline.date(at: playback.time))
+    }
+
+    private var armyTypePicker: some View {
+        HStack(spacing: 8) {
+            Menu {
+                ForEach(ArmyCategory.allCases) { category in
+                    let types = availableArmyTypes.filter { $0.category == category }
+                    if !types.isEmpty {
+                        Section(category.displayName) {
+                            ForEach(types) { type in
+                                Button(type.displayName, systemImage: type.symbolName) {
+                                    armyType = type
+                                }
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label(armyType.displayName, systemImage: armyType.symbolName)
+                    .font(Theme.Font.caption)
+            }
+            Text(armyType.canBePlacedAtSea ? "Land or sea" : "Land only")
+                .font(Theme.Font.caption)
+                .foregroundStyle(Theme.Palette.textSecondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(Theme.Palette.abyss.opacity(0.86)))
+        .onChange(of: playback.time) { _, _ in
+            // Scrubbing into another period can retire the selected type.
+            if !armyType.isAvailable(on: timeline.date(at: playback.time)) {
+                armyType = availableArmyTypes.first ?? .infantry
+            }
+        }
+    }
+
     private func smoothed(_ points: [GeoCoordinate]) -> [GeoCoordinate] {
         let cg = points.map { CGPoint(x: $0.longitude, y: $0.latitude) }
         return Geometry.smooth(cg, iterations: 2)
@@ -382,16 +425,21 @@ struct EditorScreen: View {
 
     // MARK: - Tap handling
 
-    private func handleTap(unitID: String, coordinate: GeoCoordinate) {
+    /// Handles a tap on the map. `unitID` is nil when the tap landed on open sea.
+    private func handleTap(unitID: String?, coordinate: GeoCoordinate) {
         selectedTerritoryID = unitID
         let now = playback.time
 
         switch tool {
         case .select, .country, .zoom, .pan:
-            selectedCountryID = snapshot.ownership[unitID]
+            selectedCountryID = unitID.flatMap { snapshot.ownership[$0] }
             if sizeClass == .compact { showsInspector = true }
 
         case .territory:
+            guard let unitID else {
+                errorMessage = "Tap a territory. There is nothing to capture at sea."
+                return
+            }
             guard let country = selectedCountryID ?? store.project.countries.first?.id else {
                 errorMessage = "Choose a country in the inspector first."
                 return
@@ -406,9 +454,21 @@ struct EditorScreen: View {
             )
 
         case .army:
-            guard let country = selectedCountryID ?? snapshot.ownership[unitID] else { return }
-            let army = Army(name: "\(store.project.countryIndex[country]?.shortName ?? "New") Army",
-                            countryID: country, size: 100_000, position: coordinate)
+            // Ships and aircraft belong over water as readily as over land; a rifle
+            // company does not.
+            guard unitID != nil || armyType.canBePlacedAtSea else {
+                errorMessage = "\(armyType.displayName) cannot be placed at sea. Choose an aircraft or a ship."
+                return
+            }
+            let owner = selectedCountryID ?? unitID.flatMap { snapshot.ownership[$0] }
+            guard let country = owner else {
+                errorMessage = "Choose a country in the inspector first."
+                return
+            }
+            let name = store.project.countryIndex[country]?.shortName ?? "New"
+            let army = Army(name: "\(name) \(armyType.displayName)",
+                            countryID: country, size: 100_000, position: coordinate,
+                            icon: armyType)
             store.addTimelineItem(
                 TimelineItem(title: army.name, start: now, duration: 0,
                              action: .spawnArmy(army)),

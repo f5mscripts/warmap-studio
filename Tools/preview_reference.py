@@ -357,246 +357,24 @@ def pixel_buffer(width, height, short_edge=200):
     return (math.ceil(width / scale), math.ceil(height / scale)), scale
 
 
-SPRITES = {
-    "infantry": [
-        "............",
-        "....kkk..k..",
-        "...klllk.k..",
-        "...kbbbk.k..",
-        "....kkk..k..",
-        "..kbbbbbkk..",
-        ".kbbbbbbbk..",
-        ".kbbbbbk.k..",
-        "..kbbbk..k..",
-        "..kb.bk.....",
-        "..kk.kk.....",
-        "............",
-    ],
-    "armour": [
-        "............",
-        "............",
-        "....kkkk....",
-        "...kbbbbk...",
-        "...kbbbbkkkk",
-        ".kkkkkkkkk..",
-        ".kbbbbbbbbk.",
-        ".kbbbbbbbbk.",
-        ".kkkkkkkkkk.",
-        ".klklklklkk.",
-        ".kkkkkkkkkk.",
-        "............",
-    ],
-    "cavalry": [
-        "............",
-        ".......kkk..",
-        "......kbbbk.",
-        "..kkkkkbbk..",
-        ".kbbbbbbbk..",
-        ".kbbbbbbk...",
-        ".kbbbbbbk...",
-        ".kk.kk.kk...",
-        ".k..k..k....",
-        ".k..k..k....",
-        ".kk.kk.kk...",
-        "............",
-    ],
-    "airborne": [
-        "...kkkkkk...",
-        "..kllllllk..",
-        ".kllllllllk.",
-        "..kk.kk.kk..",
-        "...k.kk.k...",
-        "....k..k....",
-        "....kbbk....",
-        "...kbbbbk...",
-        "....kbbk....",
-        "....k..k....",
-        "...kk..kk...",
-        "............",
-    ],
-    "marine": [
-        "............",
-        "....kkk.....",
-        "...klllk....",
-        "...kbbbk....",
-        "..kbbbbbk...",
-        "..kbbbbbk...",
-        "...kbbbk....",
-        "...kb.bk....",
-        "............",
-        ".kllkllkllk.",
-        "..kllkllkll.",
-        "............",
-    ],
-    "artillery": [
-        "..........k.",
-        ".........kk.",
-        "........kk..",
-        ".......kk...",
-        "......kk....",
-        ".kkk.kk.....",
-        "kbbbkk......",
-        "kbkbbk.kkkk.",
-        "kbbbkk......",
-        ".kkk........",
-        "............",
-        "............",
-    ],
-    "fleet": [
-        "............",
-        "......k.....",
-        "......k.....",
-        "....kkkkk...",
-        "....kbbbk...",
-        "kkkkkbbbkkk.",
-        "kbbbbbbbbbk.",
-        ".kbbbbbbbk..",
-        "..kkkkkkk...",
-        "...llllll...",
-        "............",
-        "............",
-    ],
-    "airForce": [
-        "............",
-        ".....kk.....",
-        "....kbbk....",
-        "....kbbk....",
-        "kkkkkbbkkkkk",
-        "kbbbbbbbbbbk",
-        "kkkkkbbkkkkk",
-        "....kbbk....",
-        "...kkbbkk...",
-        "...kbbbbk...",
-        "....kkkk....",
-        "............",
-    ],
-    "partisan": [
-        "......kkkkk.",
-        "....kkkaaak.",
-        "...klllkaak.",
-        "...kbbbk.k..",
-        "..kbbbbbkk..",
-        "..kbbbbbk...",
-        "...kbbbk....",
-        "...kb.bk....",
-        "...kb.bk....",
-        "..kk...kk...",
-        "............",
-        "............",
-    ],
-    "battle": [
-        ".k........k.",
-        ".lk......kl.",
-        "..lk....kl..",
-        "...lk..kl...",
-        "....lkkl....",
-        ".....ll.....",
-        "....lkkl....",
-        "...kl..lk...",
-        "..kl....lk..",
-        ".kk......kk.",
-        ".k........k.",
-        "............",
-    ],
-    "majorBattle": [
-        "....k..k....",
-        ".k..kaak..k.",
-        "..k.kaak.k..",
-        "...kaaaak...",
-        ".kkaaaaaakk.",
-        "..aaallaaa..",
-        ".kkaaaaaakk.",
-        "...kaaaak...",
-        "..k.kaak.k..",
-        ".k..kaak..k.",
-        "....k..k....",
-        "............",
-    ],
-    "cityCapture": [
-        "....kkkk....",
-        "....kaaak...",
-        "....kaak....",
-        "....k.......",
-        "....k.......",
-        ".kkkkkkkk...",
-        ".klllllk....",
-        ".klkllklk...",
-        ".kllllllk...",
-        ".klkllklk...",
-        ".kkkkkkkk...",
-        "............",
-    ],
-    "offensive": [
-        "............",
-        "............",
-        "......kk....",
-        "......kak...",
-        "kkkkkkkaak..",
-        "kaaaaaaaaak.",
-        "kaaaaaaaaak.",
-        "kkkkkkkaak..",
-        "......kak...",
-        "......kk....",
-        "............",
-        "............",
-    ],
-    "defensive": [
-        "............",
-        "..kkkkkkkk..",
-        "..kllllllk..",
-        "..kllbbllk..",
-        "..kllbbllk..",
-        "..klbbbblk..",
-        "...kllllk...",
-        "...kllllk...",
-        "....kllk....",
-        ".....kk.....",
-        "............",
-        "............",
-    ],
-    "siege": [
-        "............",
-        "............",
-        ".k.k.k.k.k..",
-        ".kkkkkkkkk..",
-        ".klllllllk..",
-        ".klkkkkklk..",
-        ".klkllklk...",
-        ".klkllklk...",
-        ".kkkkkkkkk..",
-        "............",
-        "............",
-        "............",
-    ],
-    "naval": [
-        ".....kk.....",
-        "....klllk...",
-        ".....kk.....",
-        "...kkkkkk...",
-        ".....ll.....",
-        ".....ll.....",
-        ".k...ll...k.",
-        ".kl..ll..lk.",
-        "..kl.ll.lk..",
-        "...klllk....",
-        "....kkk.....",
-        "............",
-    ],
-    "airBattle": [
-        "............",
-        ".....kk..a..",
-        "....kllk.aa.",
-        "....kllk.a..",
-        "kkkkkllkkkkk",
-        "kllllllllllk",
-        "kkkkkllkkkkk",
-        "....kllk....",
-        "...kkllkk.a.",
-        "...kllllk.a.",
-        "....kkkk....",
-        "............",
-    ],
-}
+def load_sprites():
+    """Read the sprite art straight out of the Swift source.
+
+    The art used to be duplicated here, which meant the preview could drift from
+    what the app actually draws — exactly the failure this tool exists to catch. It
+    is parsed instead, keyed by the Swift constant name.
+    """
+    import re
+    path = os.path.join(ROOT, "Sources", "Rendering", "PixelSprite.swift")
+    with open(path, encoding="utf-8") as f:
+        source = f.read()
+    sprites = {}
+    for name, body in re.findall(r"static let (\w+) = PixelSprite\(\[(.*?)\]\)", source, re.S):
+        sprites[name] = re.findall(r'"([^"]*)"', body)
+    return sprites
+
+
+SPRITES = load_sprites()
 
 
 def draw_sprite(d, rows, x, y, body, cell=1):
@@ -722,23 +500,23 @@ def render_pixel_map(geometry, borders, territories, cities, cam, owners, size,
     return img.resize((low_w * scale, low_h * scale), Image.NEAREST)
 
 
-def render_sprite_sheet(scale=6):
+def render_sprite_sheet(scale=5):
     """Every sprite on one sheet, so the art can be judged rather than imagined."""
     names = list(SPRITES)
-    columns = 6
+    columns = 8
     rows = math.ceil(len(names) / columns)
     cell = 16
-    img = Image.new("RGB", (columns * cell, rows * cell + 6), rgb(PIXEL_SEA))
+    img = Image.new("RGB", (columns * cell, rows * cell), rgb(PIXEL_SEA))
     d = ImageDraw.Draw(img)
     for index, name in enumerate(names):
         x = (index % columns) * cell + 2
-        y = (index // columns) * cell + 2
+        y = (index // columns) * cell + 1
         draw_sprite(d, SPRITES[name], x, y, rgb("C98C4B"))
     sheet = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
     d = ImageDraw.Draw(sheet)
     for index, name in enumerate(names):
-        x = (index % columns) * cell * scale + 4
-        y = ((index // columns) * cell + cell - 3) * scale
+        x = (index % columns) * cell * scale + 3
+        y = ((index // columns) * cell + cell - 4) * scale
         d.text((x, y), name, fill=rgb(PIXEL_PAPER))
     return sheet
 
@@ -783,11 +561,11 @@ def main():
                      (1080, 1350),
                      title="EUROPE - 1939",
                      subtitle="pixel style",
-                     markers=[(13.4, 52.5, "armour", "germany"),
-                              (21.0, 52.2, "infantry", "poland"),
-                              (2.3, 48.9, "airForce", "france"),
-                              (-0.1, 51.5, "fleet", "uk"),
-                              (19.0, 50.0, "majorBattle", None)]
+                     markers=[(13.4, 52.5, "tank", "germany"),
+                              (21.0, 52.2, "rifleman", "poland"),
+                              (2.3, 48.9, "fighter", "france"),
+                              (-0.1, 51.5, "battleship", "uk"),
+                              (19.0, 50.0, "explosion", None)]
                      ).save(os.path.join(OUT, "05_pixel_europe_1939.png"))
 
     print("  pixel invasion …")
@@ -797,9 +575,9 @@ def main():
                      sweeps={"POL": ("germany", 0.55)},
                      title="INVASION OF POLAND",
                      subtitle="advance 55%",
-                     markers=[(17.0, 52.0, "armour", "germany"),
-                              (21.0, 52.2, "infantry", "poland"),
-                              (19.0, 51.0, "offensive", None)]
+                     markers=[(17.0, 52.0, "heavyTank", "germany"),
+                              (21.0, 52.2, "machineGun", "poland"),
+                              (19.0, 51.0, "attackArrow", None)]
                      ).save(os.path.join(OUT, "06_pixel_invasion.png"))
 
     print(f"wrote frames to {OUT}")

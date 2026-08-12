@@ -83,14 +83,36 @@ extension PixelSprite {
     public static func army(_ icon: ArmyIcon) -> PixelSprite {
         switch icon {
         case .infantry: return rifleman
-        case .armour: return tank
-        case .cavalry: return horse
+        case .machineGun: return machineGun
         case .airborne: return parachute
         case .marine: return marine
-        case .artillery: return fieldGun
-        case .fleet: return warship
-        case .airForce: return aeroplane
         case .partisan: return partisan
+        case .cavalry: return horse
+        case .armour: return tank
+        case .lightTank: return lightTank
+        case .heavyTank: return heavyTank
+        case .tankDestroyer: return tankDestroyer
+        case .armouredCar: return armouredCar
+        case .artillery: return fieldGun
+        case .howitzer: return howitzer
+        case .rocketArtillery: return rocketLauncher
+        case .antiAir: return antiAirGun
+        case .airForce: return aeroplane
+        case .fighter: return fighter
+        case .bomber: return bomber
+        case .diveBomber: return diveBomber
+        case .heavyBomber: return heavyBomber
+        case .transportPlane: return transportPlane
+        case .reconnaissance: return scoutPlane
+        case .helicopter: return helicopter
+        case .jetFighter: return jetFighter
+        case .fleet: return warship
+        case .destroyer: return destroyer
+        case .cruiser: return cruiser
+        case .battleship: return battleship
+        case .carrier: return carrier
+        case .submarine: return submarine
+        case .transportShip: return transportShip
         }
     }
 
@@ -225,6 +247,346 @@ extension PixelSprite {
         "...kb.bk....",
         "...kb.bk....",
         "..kk...kk...",
+        "............",
+        "............",
+    ])
+
+    // MARK: Infantry
+
+    static let machineGun = PixelSprite([
+        "............",
+        "............",
+        "...kkkkkkkk.",
+        "...kbbbbbbk.",
+        "...kkkkkkkk.",
+        "..kbbbk.....",
+        "..kbbbk.....",
+        "..kkkkk.....",
+        "...k.k......",
+        "..k...k.....",
+        ".k.....k....",
+        "............",
+    ])
+
+    // MARK: Armour
+
+    static let lightTank = PixelSprite([
+        "............",
+        "............",
+        "............",
+        ".....kkk....",
+        "....kbbbk...",
+        "....kbbbkkkk",
+        "..kkkkkkkk..",
+        "..kbbbbbbk..",
+        "..kkkkkkkk..",
+        "..klklklkk..",
+        "..kkkkkkkk..",
+        "............",
+    ])
+
+    static let heavyTank = PixelSprite([
+        "............",
+        "....kkkkk...",
+        "...kbbbbbk..",
+        "...kbbbbbkkk",
+        "...kbbbbbkkk",
+        ".kkkkkkkkkk.",
+        "kbbbbbbbbbbk",
+        "kbbbbbbbbbbk",
+        "kkkkkkkkkkkk",
+        "klklklklklkk",
+        "kkkkkkkkkkkk",
+        "............",
+    ])
+
+    static let tankDestroyer = PixelSprite([
+        "............",
+        "............",
+        "......kkkkkk",
+        "....kkkbbk..",
+        "...kbbbbbk..",
+        "..kbbbbbbk..",
+        ".kkkkkkkkkk.",
+        ".kbbbbbbbbk.",
+        ".kkkkkkkkkk.",
+        ".klklklklkk.",
+        ".kkkkkkkkkk.",
+        "............",
+    ])
+
+    static let armouredCar = PixelSprite([
+        "............",
+        "............",
+        ".....kkk....",
+        "....kbbbkkkk",
+        "..kkkkkkkk..",
+        ".kbbbbbbbbk.",
+        ".kbbbbbbbbk.",
+        ".kkkkkkkkkk.",
+        "..klk..klk..",
+        "..klk..klk..",
+        "..kkk..kkk..",
+        "............",
+    ])
+
+    // MARK: Artillery
+
+    static let howitzer = PixelSprite([
+        "............",
+        "........kk..",
+        ".......kk...",
+        "......kk....",
+        "..kkkkk.....",
+        ".kbbbbk.....",
+        ".kbbbbkkkkkk",
+        "klbbbblk....",
+        "kllbbllk....",
+        "klllllk.....",
+        ".kkkkk......",
+        "............",
+    ])
+
+    static let rocketLauncher = PixelSprite([
+        "........kkk.",
+        ".......kaak.",
+        "......kaak..",
+        ".....kaak...",
+        "....kaak....",
+        "...kkkk.....",
+        "..kbbbbbk...",
+        "..kbbbbbk...",
+        "..kkkkkkk...",
+        "..klk.klk...",
+        "..kkk.kkk...",
+        "............",
+    ])
+
+    static let antiAirGun = PixelSprite([
+        "..kk...kk...",
+        "..kk...kk...",
+        "..kk...kk...",
+        "..kkkkkkk...",
+        "...kbbbk....",
+        "..kbbbbbk...",
+        ".kbbbbbbbk..",
+        ".kkkkkkkkk..",
+        "..klk.klk...",
+        "..klk.klk...",
+        "..kkk.kkk...",
+        "............",
+    ])
+
+    // MARK: Aircraft
+
+    static let fighter = PixelSprite([
+        "............",
+        "............",
+        ".....kk.....",
+        "....kllk....",
+        "....kbbk....",
+        "..kkkbbkkk..",
+        "..kbbbbbbk..",
+        "..kkkbbkkk..",
+        "....kbbk....",
+        "...kkbbkk...",
+        "....kkkk....",
+        "............",
+    ])
+
+    static let bomber = PixelSprite([
+        "............",
+        ".....kk.....",
+        "....kbbk....",
+        ".kk.kbbk.kk.",
+        "kkkkkbbkkkkk",
+        "kbbbbbbbbbbk",
+        "kkkkkbbkkkkk",
+        "....kbbk....",
+        "...kkbbkk...",
+        "...kbbbbk...",
+        "....kkkk....",
+        "............",
+    ])
+
+    static let diveBomber = PixelSprite([
+        "............",
+        ".....kk.....",
+        "....kbbk....",
+        "..kk.bb.kk..",
+        ".kbbkbbkbbk.",
+        ".kkkkbbkkkk.",
+        "....kbbk....",
+        "...kkbbkk...",
+        "....kaak....",
+        "....kaak....",
+        "....kkkk....",
+        "............",
+    ])
+
+    static let heavyBomber = PixelSprite([
+        "............",
+        ".....kk.....",
+        "....kbbk....",
+        ".k.k.kk.k.k.",
+        "kkkkkbbkkkkk",
+        "kbbbbbbbbbbk",
+        "kkkkkbbkkkkk",
+        "....kbbk....",
+        "..kkkbbkkk..",
+        "..kbbbbbbk..",
+        "...kkkkkk...",
+        "............",
+    ])
+
+    static let transportPlane = PixelSprite([
+        "............",
+        "....kkkk....",
+        "...kbbbbk...",
+        "kkkkbbbbkkkk",
+        "kbbbbbbbbbbk",
+        "kkkkbbbbkkkk",
+        "...kbbbbk...",
+        "...kbbbbk...",
+        "..kkbbbbkk..",
+        "..kbbbbbbk..",
+        "...kkkkkk...",
+        "............",
+    ])
+
+    static let scoutPlane = PixelSprite([
+        "............",
+        "....kllk....",
+        "....kbbk....",
+        "kkkkkbbkkkkk",
+        "kbbbbbbbbbbk",
+        "kkkkkbbkkkkk",
+        "....kbbk....",
+        "....kbbk....",
+        "....kbbk....",
+        "...kkbbkk...",
+        "....kkkk....",
+        "............",
+    ])
+
+    static let helicopter = PixelSprite([
+        "kkkkkkkkkkk.",
+        ".....k......",
+        "...kkkkk....",
+        "..kbbbbbk...",
+        "..kbbbbbkkkk",
+        "..kbbbbbk.kk",
+        "..kkkkkkk.k.",
+        "...k...k....",
+        "..kkk.kkk...",
+        "............",
+        "............",
+        "............",
+    ])
+
+    static let jetFighter = PixelSprite([
+        "............",
+        ".....kk.....",
+        "....kbbk....",
+        "....kbbk....",
+        "...kkbbkk...",
+        "..kbkbbkbk..",
+        ".kbbkbbkbbk.",
+        "kbbkkbbkkbbk",
+        "kkk.kbbk.kkk",
+        "....kbbk....",
+        "...kkaakk...",
+        "....kkkk....",
+    ])
+
+    // MARK: Naval
+
+    static let destroyer = PixelSprite([
+        "............",
+        "............",
+        "......k.....",
+        "...kk.k.kk..",
+        "...kbkkkbk..",
+        "kkkkbbbbbkkk",
+        "kbbbbbbbbbbk",
+        ".kbbbbbbbbk.",
+        "..kkkkkkkk..",
+        "...llllll...",
+        "............",
+        "............",
+    ])
+
+    static let cruiser = PixelSprite([
+        "............",
+        "............",
+        ".....kk.....",
+        "..kk.kk.kk..",
+        "..kbkkkkkbk.",
+        "kkkkbbbbbkkk",
+        "kbbbbbbbbbbk",
+        "kbbbbbbbbbbk",
+        ".kkkkkkkkkk.",
+        "..llllllll..",
+        "............",
+        "............",
+    ])
+
+    static let battleship = PixelSprite([
+        "............",
+        ".....kk.....",
+        ".....kk.....",
+        "..kkkkkkk...",
+        ".kkbbbbbkk..",
+        "kkbbbbbbbkkk",
+        "kbbbbbbbbbbk",
+        "kbbbbbbbbbbk",
+        "kbbbbbbbbbbk",
+        ".kkkkkkkkkk.",
+        "..llllllll..",
+        "............",
+    ])
+
+    static let carrier = PixelSprite([
+        "............",
+        "............",
+        "........kk..",
+        "kkkkkkkkkkkk",
+        "klllllllkbbk",
+        "kkkkkkkkkkkk",
+        "kbbbbbbbbbbk",
+        ".kbbbbbbbbk.",
+        "..kkkkkkkk..",
+        "...llllll...",
+        "............",
+        "............",
+    ])
+
+    static let submarine = PixelSprite([
+        "............",
+        ".....k......",
+        "....kkk.....",
+        "....kbbk....",
+        "....kbbk....",
+        ".kkkkbbkkkk.",
+        "kbbbbbbbbbbk",
+        "kbbbbbbbbbbk",
+        ".kkkkkkkkkk.",
+        "............",
+        "............",
+        "............",
+    ])
+
+    static let transportShip = PixelSprite([
+        "............",
+        "......k.....",
+        "...kk.k.....",
+        "...kkkk.....",
+        "..kbbbbk....",
+        "kkkkkkkkkkk.",
+        "kbbbbbbbbbk.",
+        "kbbbbbbbbbk.",
+        ".kkkkkkkkk..",
+        "..lllllll...",
         "............",
         "............",
     ])
