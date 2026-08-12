@@ -156,10 +156,13 @@ final class PixelStyleTests: XCTestCase {
     func testRunsReproduceTheArt() {
         let sprite = PixelSprite(["..kk", "kbbk", "...."])
         let runs = sprite.runs
-        XCTAssertEqual(runs.count, 3)
+        // Four: the outline pixels either side of the body are separate runs, and the
+        // blank row contributes nothing at all.
+        XCTAssertEqual(runs.count, 4)
         XCTAssertEqual(runs[0], PixelSprite.Run(x: 2, y: 0, width: 2, tone: .ink))
         XCTAssertEqual(runs[1], PixelSprite.Run(x: 0, y: 1, width: 1, tone: .ink))
         XCTAssertEqual(runs[2], PixelSprite.Run(x: 1, y: 1, width: 2, tone: .body))
+        XCTAssertEqual(runs[3], PixelSprite.Run(x: 3, y: 1, width: 1, tone: .ink))
         XCTAssertNil(runs.first { $0.tone == .empty })
     }
 

@@ -251,6 +251,181 @@ final class SimulationTests: XCTestCase {
         })
     }
 
+    // MARK: - Coalitions
+
+    /// Two countries a side, in a line: alpha and beta face gamma and delta.
+    ///
+    /// `weakScale` shrinks the second coalition's countries, so the matchup can be
+    /// set anywhere from even to hopeless.
+    private func coalitionFixture(weakScale: Double)
+    -> (War, [String: String], [String: CountryStrength], Timeline, [String: [String]], [String: String]) {
+        let neighbours = [
+            "T1": ["T2"], "T2": ["T1", "T3"], "T3": ["T2", "T4"],
+            "T4": ["T3", "T5"], "T5": ["T4", "T6"], "T6": ["T5"],
+        ]
+        let war = War(
+            name: "Coalition War",
+            interval: HistoricalInterval(start: HistoricalDate(year: 1939, month: 9, day: 1),
+                                         end: HistoricalDate(year: 1941, month: 9, day: 1)),
+            factions: [
+                Faction(name: "Alliance", colorHex: "5E6860",
+                        memberCountryIDs: ["alpha", "beta"]),
+                Faction(name: "Coalition", colorHex: "B04A44",
+                        memberCountryIDs: ["gamma", "delta"]),
+            ]
+        )
+        let ownership = ["T1": "alpha", "T2": "alpha", "T3": "beta",
+                         "T4": "gamma", "T5": "delta", "T6": "delta"]
+        let strengths: [String: CountryStrength] = [
+            "alpha": .major,
+            "beta": CountryStrength(military: 0.9, economy: 0.9, population: 0.9),
+            "gamma": CountryStrength(military: 1.4 * weakScale, economy: 1.4 * weakScale,
+                                     population: 1.3 * weakScale, technology: 1.3,
+                                     supply: 1.2, morale: 1.1),
+            "delta": CountryStrength(military: 0.9 * weakScale, economy: 0.9 * weakScale,
+                                     population: 0.9 * weakScale),
+        ]
+        let timeline = Timeline(duration: 20, historicalRange: war.interval,
+                                initialOwnership: ownership)
+        let capitals = ["alpha": "T1", "beta": "T3", "gamma": "T4", "delta": "T6"]
+        return (war, ownership, strengths, timeline, neighbours, capitals)
+    }
+
+    /// Territories held by each side at the end.
+    private func territoryTally(_ ownership: [String: String], war: War) -> [Int] {
+        war.factions.map { faction in
+            ownership.values.filter { faction.memberCountryIDs.contains($0) }.count
+        }
+    }
+
+    func testCoalitionPoolingHasDiminishingReturns() throws {
+        let simulator = WarSimulator(config: SimulationConfig(), neighbours: [:])
+        let interval = HistoricalInterval(start: HistoricalDate(year: 1939),
+                                          end: HistoricalDate(year: 1941))
+        let war = War(name: "Big", interval: interval, factions: [
+            Faction(name: "Five", colorHex: "000000",
+                    memberCountryIDs: ["a", "b", "c", "d", "e"]),
+            Faction(name: "One", colorHex: "FFFFFF", memberCountryIDs: ["z"]),
+        ])
+        let even = Dictionary(uniqueKeysWithValues:
+            ["a", "b", "c", "d", "e", "z"].map { ($0, CountryStrength.major) })
+        let state = simulator.coalitionState(war: war, strengths: even,
+                                             morale: [:], capitulated: [], fortune: [:])
+
+        let five = try XCTUnwrap(state.offence[war.factions[0].id])
+        let one = try XCTUnwrap(state.offence[war.factions[1].id])
+        // Five average powers are worth about 3.9 of one, not five.
+        XCTAssertEqual(five / one, pow(5, 0.85), accuracy: 0.001)
+        XCTAssertGreaterThan(five, one * 3, "numbers should still count for a lot")
+        XCTAssertLessThan(five, one * 5, "but not simply add up")
+
+        // A member that has capitulated stops contributing.
+        let reduced = simulator.coalitionState(war: war, strengths: even, morale: [:],
+                                               capitulated: ["a", "b"], fortune: [:])
+        XCTAssertLessThan(try XCTUnwrap(reduced.offence[war.factions[0].id]), five)
+    }
+
+    func testFortuneIsDrawnOncePerWarAndVariesWithTheSeed() {
+        let (war, _, _, _, neighbours, _) = coalitionFixture(weakScale: 0.8)
+
+        func fortunes(seed: UInt64, randomness: Double = 0.35) -> [Double] {
+            let simulator = WarSimulator(config: SimulationConfig(seed: seed,
+                                                                  randomness: randomness),
+                                         neighbours: neighbours)
+            return war.factions.map { simulator.fortunes(for: war)[$0.id] ?? 1 }
+        }
+
+        XCTAssertEqual(fortunes(seed: 7), fortunes(seed: 7), "a seed must fix the luck")
+        XCTAssertNotEqual(fortunes(seed: 7), fortunes(seed: 8))
+        // Within ±35% at the default randomness, and switched off entirely at zero.
+        for value in fortunes(seed: 7) {
+            XCTAssertGreaterThanOrEqual(value, 0.65)
+            XCTAssertLessThanOrEqual(value, 1.35)
+        }
+        XCTAssertEqual(fortunes(seed: 7, randomness: 0), [1, 1],
+                       "no luck means no fortune roll either")
+    }
+
+    /// The point of the fortune roll: a moderately weaker coalition has to win
+    /// sometimes, or "luck" is a slider that changes nothing.
+    ///
+    /// Two hundred seeds of the same matchup. Per-tick jitter alone cannot do this —
+    /// over a hundred ticks it averages out to almost exactly 1, which is what the
+    /// companion test below records.
+    func testAWeakerCoalitionWinsARespectableShareOfWars() {
+        let (war, ownership, strengths, timeline, neighbours, capitals) =
+            coalitionFixture(weakScale: 0.8)
+
+        var upsets = 0
+        let seeds = 200
+        for seed in 1...UInt64(seeds) {
+            let simulator = WarSimulator(config: SimulationConfig(seed: seed),
+                                         neighbours: neighbours,
+                                         capitalUnits: capitals)
+            let result = simulator.simulate(war: war, initialOwnership: ownership,
+                                            strengths: strengths, timeline: timeline)
+            let tally = territoryTally(result.finalOwnership, war: war)
+            if tally[1] > tally[0] { upsets += 1 }
+        }
+
+        let rate = Double(upsets) / Double(seeds)
+        XCTAssertGreaterThanOrEqual(rate, 0.15,
+                                    "the underdog never winning makes the seed meaningless")
+        XCTAssertLessThanOrEqual(rate, 0.35,
+                                 "the underdog winning this often makes strength meaningless")
+    }
+
+    func testWithoutTheFortuneRollTheUnderdogNeverWins() {
+        let (war, ownership, strengths, timeline, neighbours, capitals) =
+            coalitionFixture(weakScale: 0.8)
+
+        var upsets = 0
+        for seed in 1...UInt64(40) {
+            // Per-tick jitter at full strength, but no per-war luck.
+            let config = SimulationConfig(seed: seed, randomness: 0.35, warFortune: 0)
+            let result = WarSimulator(config: config, neighbours: neighbours,
+                                      capitalUnits: capitals)
+                .simulate(war: war, initialOwnership: ownership,
+                          strengths: strengths, timeline: timeline)
+            let tally = territoryTally(result.finalOwnership, war: war)
+            if tally[1] > tally[0] { upsets += 1 }
+        }
+        XCTAssertEqual(upsets, 0,
+                       "tick-level randomness averages out; this is why fortune exists")
+    }
+
+    func testAnAllyOnTheFrontFightsHarderWithABigPartnerBehindIt() throws {
+        let neighbours = ["T1": ["T2"], "T2": ["T1"]]
+        let interval = HistoricalInterval(start: HistoricalDate(year: 1939, month: 9, day: 1),
+                                          end: HistoricalDate(year: 1941, month: 9, day: 1))
+        let ownership = ["T1": "small", "T2": "target"]
+        let timeline = Timeline(duration: 20, historicalRange: interval,
+                                initialOwnership: ownership)
+        let strengths: [String: CountryStrength] = [
+            "small": .minor, "giant": .major, "target": .minor,
+        ]
+
+        func captureDate(alliedWithGiant: Bool) throws -> HistoricalDate {
+            let members = alliedWithGiant ? ["small", "giant"] : ["small"]
+            let war = War(name: "W", interval: interval, factions: [
+                Faction(name: "A", colorHex: "000000", memberCountryIDs: members),
+                Faction(name: "B", colorHex: "FFFFFF", memberCountryIDs: ["target"]),
+            ])
+            let result = WarSimulator(config: .deterministic, neighbours: neighbours)
+                .simulate(war: war, initialOwnership: ownership,
+                          strengths: strengths, timeline: timeline)
+            return try XCTUnwrap(result.events.first { $0.kind == .invasion }?.date,
+                                 "the border province should fall either way")
+        }
+
+        // The giant holds no territory here — it is purely the weight behind the
+        // small ally standing on the border, so the only thing that can make the
+        // attack land sooner is coalition support reaching the front.
+        XCTAssertLessThan(try captureDate(alliedWithGiant: true),
+                          try captureDate(alliedWithGiant: false),
+                          "coalition support should reach the country actually fighting")
+    }
+
     func testBearingPointsFromTheAttackerTowardsTheTarget() {
         // T1 is west of T2, so an advance from T1 into T2 should read as due east.
         let simulator = WarSimulator(

@@ -60,7 +60,20 @@ should become the default for new projects if the user prefers it.
 * **Pacing / text style** — bigger titles, faster entries, punchier event captions.
   Tune `TextStyle.title` and the entry fractions in `TextAnimator.resolve`.
 
-## 3. Coalition war simulator  (decided: manual picking)
+## 3. Coalition war simulator  (decided: manual picking)  — **DONE**
+
+`SimulatorSheet` is now a two-coalition picker: a searchable country list with flags,
+an A/B button per row, and a live pooled-strength bar per side. `WarSimulator` pools
+each coalition (mean × `count^0.85`), passes a share of the pooled figure to whoever
+is actually on the front (`coalitionSupport`, default 0.45), and draws a per-war
+fortune once from the seed (`warFortune` × `randomness`, ±35% at the defaults).
+
+Measured over 200 seeds of a coalition ~29% weaker: **23% upsets** with the fortune
+roll, **0%** without it — the per-tick jitter really does average out, exactly as
+this section predicted. `testAWeakerCoalitionWinsARespectableShareOfWars` asserts the
+15–35% band.
+
+The original brief follows, for reference.
 
 Replace the current one-country-per-side `SimulatorSheet` with:
 

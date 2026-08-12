@@ -66,6 +66,21 @@ public struct SimulationConfig: Codable, Hashable, Sendable {
     /// A country capitulates once it holds this fraction or less of what it started
     /// with, or loses its capital.
     public var capitulationThreshold: Double
+    /// How much of a coalition's pooled power reaches a member fighting at the front.
+    ///
+    /// 0 makes every country fight alone, whatever its allies are doing; 1 lets the
+    /// smallest ally on the front fight with the whole alliance behind it. Something
+    /// in between is what makes a coalition worth joining without making the member
+    /// standing on the border irrelevant.
+    public var coalitionSupport: Double
+    /// How far one war's luck can swing a side's effective strength, as a multiple
+    /// of `randomness` — so the default pair gives ±35%.
+    ///
+    /// Per-tick jitter is not enough on its own. Over the hundreds of ticks a war
+    /// takes it averages out almost exactly to 1, which is why the model used to be
+    /// very nearly deterministic even at high randomness. This is drawn *once* per
+    /// side per war, so some seeds genuinely hand the war to the weaker coalition.
+    public var warFortune: Double
 
     public init(seed: UInt64 = 20_260_811,
                 tickDays: Int = 7,
@@ -74,7 +89,9 @@ public struct SimulationConfig: Codable, Hashable, Sendable {
                 homeDefenceBonus: Double = 1.35,
                 multiFrontPenalty: Double = 0.12,
                 moraleLossPerTerritory: Double = 0.04,
-                capitulationThreshold: Double = 0.25) {
+                capitulationThreshold: Double = 0.25,
+                coalitionSupport: Double = 0.45,
+                warFortune: Double = 1.0) {
         self.seed = seed
         self.tickDays = max(1, tickDays)
         self.baseAdvancePerTick = baseAdvancePerTick
@@ -83,8 +100,12 @@ public struct SimulationConfig: Codable, Hashable, Sendable {
         self.multiFrontPenalty = multiFrontPenalty
         self.moraleLossPerTerritory = moraleLossPerTerritory
         self.capitulationThreshold = capitulationThreshold
+        self.coalitionSupport = min(max(coalitionSupport, 0), 1)
+        self.warFortune = max(0, warFortune)
     }
 
+    /// No luck of any kind: neither per tick nor per war, since both are scaled by
+    /// `randomness`. The outcome follows only from the strengths involved.
     public static let deterministic = SimulationConfig(randomness: 0)
 }
 
@@ -161,11 +182,18 @@ public struct WarSimulator: Sendable {
         var log: [String] = []
 
         let startingCount = countTerritories(ownership)
+        // One roll for the whole war, before anything else draws from the seed.
+        let fortune = fortunes(for: war)
         var date = war.interval.start
         let end = war.interval.end
 
         while date < end {
             let next = date.adding(days: config.tickDays)
+            // Coalition figures are pooled once per tick, from the morale each side
+            // starts the tick with — not per territory, which would make a country's
+            // strength depend on how far down the alphabet its front happened to be.
+            let coalitions = coalitionState(war: war, strengths: strengths, morale: morale,
+                                            capitulated: capitulated, fortune: fortune)
 
             // Every territory that currently borders an enemy is a potential front.
             for (unit, defender) in ownership.sorted(by: { $0.key < $1.key }) {
@@ -176,7 +204,8 @@ public struct WarSimulator: Sendable {
                                                        war: war,
                                                        strengths: strengths,
                                                        morale: morale,
-                                                       capitulated: capitulated)
+                                                       capitulated: capitulated,
+                                                       state: coalitions)
                 else {
                     // No enemy adjacent any more: the front has moved on and any
                     // partial progress here is given up.
@@ -190,7 +219,8 @@ public struct WarSimulator: Sendable {
                                       strengths: strengths,
                                       morale: morale,
                                       ownership: ownership,
-                                      war: war)
+                                      war: war,
+                                      state: coalitions)
                 let advance = config.baseAdvancePerTick * odds
                     * random.jitter(spread: config.randomness)
 
@@ -269,16 +299,113 @@ public struct WarSimulator: Sendable {
                                 log: log)
     }
 
+    // MARK: - Coalitions
+
+    /// What a war looks like from the coalitions' point of view, recomputed once per
+    /// tick rather than per territory.
+    struct CoalitionState: Sendable {
+        /// Pooled offensive figure per faction.
+        var offence: [UUID: Double] = [:]
+        /// Pooled defensive figure per faction.
+        var defence: [UUID: Double] = [:]
+        /// This war's luck, one multiplier per faction, fixed for the whole war.
+        var fortune: [UUID: Double] = [:]
+    }
+
+    /// The luck each side got handed this war.
+    ///
+    /// Drawn from its own stream so that adding a random decision elsewhere in the
+    /// simulation cannot shift it, and taken in faction order so the same war always
+    /// gets the same fortunes.
+    func fortunes(for war: War) -> [UUID: Double] {
+        let spread = config.randomness * config.warFortune
+        guard spread > 0 else { return [:] }
+        var random = DeterministicRandom(seed: config.seed).stream("war-fortune")
+        var result: [UUID: Double] = [:]
+        for faction in war.factions {
+            // Floored well above zero: a side that rolled badly should be at a
+            // disadvantage, not unable to fight at all.
+            result[faction.id] = max(0.2, 1 + random.double(in: -spread...spread))
+        }
+        return result
+    }
+
+    /// Pools each coalition's strength for this tick.
+    ///
+    /// A coalition's figure is the *mean* of its members scaled by `count^0.85`, not
+    /// their sum: five average powers make a coalition roughly 3.9 times as strong as
+    /// one, so numbers matter and mass conscription of tiny allies does not simply
+    /// add up. Countries that have already capitulated contribute nothing.
+    func coalitionState(war: War,
+                        strengths: [String: CountryStrength],
+                        morale: [String: Double],
+                        capitulated: [String],
+                        fortune: [UUID: Double]) -> CoalitionState {
+        var state = CoalitionState(fortune: fortune)
+        for faction in war.factions {
+            var offence = 0.0
+            var defence = 0.0
+            var count = 0.0
+            for member in faction.memberCountryIDs where !capitulated.contains(member) {
+                let strength = strengths[member] ?? .minor
+                let spirit = morale[member] ?? 1
+                offence += strength.offensivePower * spirit
+                defence += strength.defensivePower * spirit
+                count += 1
+            }
+            guard count > 0 else { continue }
+            let scale = pow(count, 0.85) / count
+            state.offence[faction.id] = offence * scale
+            state.defence[faction.id] = defence * scale
+        }
+        return state
+    }
+
+    /// What a country actually attacks with: its own power, plus a share of whatever
+    /// its coalition has behind it, times this war's luck for that side.
+    ///
+    /// The support term is the difference between the pooled figure and the country's
+    /// own, so a lone belligerent gains nothing, and a small ally holding the front
+    /// for a large partner gains a great deal.
+    private func attackPower(of country: String,
+                             war: War,
+                             strengths: [String: CountryStrength],
+                             morale: [String: Double],
+                             state: CoalitionState) -> Double {
+        let own = (strengths[country] ?? .minor).offensivePower * (morale[country] ?? 1)
+        guard let faction = war.faction(of: country) else { return own }
+        let pooled = state.offence[faction.id] ?? own
+        let support = config.coalitionSupport * max(0, pooled - own)
+        return (own + support) * (state.fortune[faction.id] ?? 1)
+    }
+
+    /// The defensive counterpart. A coalition holds a line together too.
+    private func defencePower(of country: String,
+                              war: War,
+                              strengths: [String: CountryStrength],
+                              morale: [String: Double],
+                              state: CoalitionState) -> Double {
+        let own = (strengths[country] ?? .minor).defensivePower * (morale[country] ?? 1)
+        guard let faction = war.faction(of: country) else { return own }
+        let pooled = state.defence[faction.id] ?? own
+        let support = config.coalitionSupport * max(0, pooled - own)
+        return (own + support) * (state.fortune[faction.id] ?? 1)
+    }
+
     // MARK: - Combat model
 
     /// The strongest enemy country adjacent to a territory, or nil if none is.
+    ///
+    /// "Strongest" counts the coalition behind each candidate, so a minor ally with a
+    /// great power at its back can be the one that leads the push.
     private func strongestAttacker(on unit: String,
                                    defender: String,
                                    ownership: [String: String],
                                    war: War,
                                    strengths: [String: CountryStrength],
                                    morale: [String: Double],
-                                   capitulated: [String]) -> String? {
+                                   capitulated: [String],
+                                   state: CoalitionState) -> String? {
         var best: String?
         var bestPower = 0.0
         // Sorted for determinism: a dictionary's order must never decide a war.
@@ -287,7 +414,8 @@ public struct WarSimulator: Sendable {
                   owner != defender,
                   !capitulated.contains(owner),
                   war.areEnemies(owner, defender) else { continue }
-            let power = (strengths[owner] ?? .minor).offensivePower * (morale[owner] ?? 1)
+            let power = attackPower(of: owner, war: war, strengths: strengths,
+                                    morale: morale, state: state)
             if power > bestPower {
                 bestPower = power
                 best = owner
@@ -303,12 +431,13 @@ public struct WarSimulator: Sendable {
                             strengths: [String: CountryStrength],
                             morale: [String: Double],
                             ownership: [String: String],
-                            war: War) -> Double {
-        let attack = (strengths[attacker] ?? .minor).offensivePower
-            * (morale[attacker] ?? 1)
+                            war: War,
+                            state: CoalitionState) -> Double {
+        let attack = attackPower(of: attacker, war: war, strengths: strengths,
+                                 morale: morale, state: state)
             * frontPenalty(for: attacker, ownership: ownership, war: war)
-        let defence = (strengths[defender] ?? .minor).defensivePower
-            * (morale[defender] ?? 1)
+        let defence = defencePower(of: defender, war: war, strengths: strengths,
+                                   morale: morale, state: state)
             * config.homeDefenceBonus
 
         guard defence > 0 else { return 3 }

@@ -194,15 +194,21 @@ struct ExportSheet: View {
 
 // MARK: - Auto simulator
 
-/// Configure strengths and let the simulator resolve the war.
+/// Pick both coalitions, weigh them against each other, and let the simulator
+/// resolve the war.
+///
+/// Every member of both sides is chosen by hand. Nothing is auto-filled from
+/// alliances: who joins a war is the most interesting decision in the whole app, and
+/// inferring it would quietly take that decision away.
 struct SimulatorSheet: View {
     @ObservedObject var store: EditorStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var attacker: String = ""
-    @State private var defender: String = ""
-    @State private var attackerStrength = CountryStrength.major
-    @State private var defenderStrength = CountryStrength.minor
+    @State private var sideA: [String] = []
+    @State private var sideB: [String] = []
+    @State private var search = ""
+    @State private var sideAStrength = CountryStrength.major
+    @State private var sideBStrength = CountryStrength.minor
     @State private var randomness = 0.35
     @State private var seed = 20_260_811
     @State private var result: SimulationResult?
@@ -216,8 +222,32 @@ struct SimulatorSheet: View {
         var explanation: String {
             self == .historical
                 ? "Keeps the scripted events already on the timeline. Nothing is invented."
-                : "Resolves the war from the strengths below. Alternate outcomes are expected."
+                : "Resolves the war from the coalitions and strengths below. Alternate outcomes are expected."
         }
+    }
+
+    /// Which side a country is on, if either.
+    private enum Side { case a, b }
+
+    private var date: HistoricalDate { store.project.activeTimeline.historicalRange.start }
+
+    private var matched: [Country] {
+        let query = search.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !query.isEmpty else { return store.project.countries }
+        return store.project.countries.filter {
+            $0.name.lowercased().contains(query) || $0.shortName.lowercased().contains(query)
+        }
+    }
+
+    /// The pooled figure the engine will fight with: the mean member's offensive
+    /// power scaled by `count^0.85`, so five allies are worth about 3.9 of one.
+    private func pooledPower(_ members: [String], _ strength: CountryStrength) -> Double {
+        guard !members.isEmpty else { return 0 }
+        return strength.offensivePower * pow(Double(members.count), 0.85)
+    }
+
+    private var canSimulate: Bool {
+        !sideA.isEmpty && !sideB.isEmpty && mode == .sandbox && !isRunning
     }
 
     var body: some View {
@@ -233,25 +263,31 @@ struct SimulatorSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("Sides") {
-                    Picker("Attacker", selection: $attacker) {
-                        ForEach(store.project.countries) { Text($0.name).tag($0.id) }
+                matchupSection
+
+                Section("Add countries") {
+                    TextField("Search", text: $search)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if matched.isEmpty {
+                        Text("No country matches “\(search)”.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
-                    Picker("Defender", selection: $defender) {
-                        ForEach(store.project.countries) { Text($0.name).tag($0.id) }
+                    ForEach(matched) { country in
+                        countryRow(country)
                     }
                 }
 
                 if mode == .sandbox {
-                    strengthSection("Attacker", $attackerStrength)
-                    strengthSection("Defender", $defenderStrength)
+                    strengthSection("Side A strength", $sideAStrength)
+                    strengthSection("Side B strength", $sideBStrength)
 
                     Section("Resolution") {
                         VStack(alignment: .leading) {
                             Text("Luck \(Int(randomness * 100))%")
                                 .font(.caption).foregroundStyle(.secondary)
                             Slider(value: $randomness, in: 0...1).tint(Theme.Palette.gold)
-                            Text("At 0% the outcome follows only from the strengths above.")
+                            Text("Luck is drawn once for the whole war as well as tick by tick, so a weaker coalition can genuinely win some seeds. At 0% the outcome follows only from the strengths.")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                         Stepper("Seed \(seed)", value: $seed, in: 1...999_999)
@@ -259,25 +295,7 @@ struct SimulatorSheet: View {
                 }
 
                 if let result {
-                    Section("Result") {
-                        if result.capitulated.isEmpty {
-                            Text("No side was knocked out before the end date.")
-                                .font(.caption)
-                        } else {
-                            ForEach(result.capitulated, id: \.self) { id in
-                                Label("\(store.project.countryIndex[id]?.name ?? id) capitulated",
-                                      systemImage: "flag.slash.fill")
-                                .font(.caption)
-                            }
-                        }
-                        Text("\(result.items.count) clips generated")
-                            .font(.caption).foregroundStyle(.secondary)
-                        ForEach(result.log.prefix(12), id: \.self) { line in
-                            Text(line).font(.system(size: 11, design: .monospaced))
-                        }
-                        Button("Apply to timeline") { apply(result) }
-                            .buttonStyle(GoldButtonStyle())
-                    }
+                    resultSection(result)
                 }
             }
             .navigationTitle("Auto Simulator")
@@ -288,20 +306,166 @@ struct SimulatorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isRunning ? "Running…" : "Simulate") { run() }
-                        .disabled(isRunning || attacker.isEmpty || defender.isEmpty
-                                  || attacker == defender || mode == .historical)
+                        .disabled(!canSimulate)
+                }
+            }
+            .onAppear(perform: seedFromProject)
+        }
+    }
+
+    /// Starts from the war the project already describes, if it has one.
+    ///
+    /// This is not the auto-filling of allies the design rules out: it is the user's
+    /// own list, loaded so they can edit it rather than retype it. A project without
+    /// a war opens with both sides empty.
+    private func seedFromProject() {
+        guard sideA.isEmpty, sideB.isEmpty, let war = store.project.wars.first else { return }
+        sideA = war.factions.first?.memberCountryIDs ?? []
+        sideB = war.factions.dropFirst().first?.memberCountryIDs ?? []
+    }
+
+    // MARK: - The matchup
+
+    private var matchupSection: some View {
+        Section("The matchup") {
+            coalition(title: "Side A", members: sideA, strength: sideAStrength,
+                      tint: Theme.Palette.gold, side: .a)
+            coalition(title: "Side B", members: sideB, strength: sideBStrength,
+                      tint: Theme.Palette.danger, side: .b)
+            if sideA.isEmpty || sideB.isEmpty {
+                Text("Pick at least one country for each side.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func coalition(title: String, members: [String], strength: CountryStrength,
+                           tint: Color, side: Side) -> some View {
+        let power = pooledPower(members, strength)
+        let opposing = side == .a ? pooledPower(sideB, sideBStrength)
+                                  : pooledPower(sideA, sideAStrength)
+        let scale = max(power, opposing, 0.0001)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title).font(Theme.Font.ui(13, weight: .semibold))
+                Spacer()
+                Text(members.isEmpty ? "—" : String(format: "%.1f", power))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            // The bar is the thing to watch while adding countries: it is the same
+            // pooled figure the simulator will actually fight with.
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.Palette.slate)
+                    Capsule().fill(tint)
+                        .frame(width: geometry.size.width * CGFloat(power / scale))
+                }
+            }
+            .frame(height: 7)
+            .animation(Theme.Motion.quick, value: power)
+
+            if members.isEmpty {
+                Text("No countries yet").font(.caption2).foregroundStyle(.secondary)
+            } else {
+                ForEach(members, id: \.self) { id in
+                    if let country = store.project.countryIndex[id] {
+                        Button {
+                            remove(id)
+                        } label: {
+                            HStack(spacing: 8) {
+                                CountryChip(country: country, date: date, isSelected: true)
+                                Image(systemName: "minus.circle")
+                                    .foregroundStyle(Theme.Palette.textTertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
-        .onAppear {
-            attacker = store.project.countries.first?.id ?? ""
-            defender = store.project.countries.dropFirst().first?.id ?? ""
+        .padding(.vertical, 2)
+    }
+
+    private func countryRow(_ country: Country) -> some View {
+        HStack(spacing: 10) {
+            FlagView(country: country, date: date)
+                .frame(width: 26, height: 17)
+                .clipShape(RoundedRectangle(cornerRadius: 2))
+                .overlay(RoundedRectangle(cornerRadius: 2)
+                    .strokeBorder(Theme.Palette.rule, lineWidth: 0.5))
+            Text(country.name).font(Theme.Font.ui(13, weight: .medium))
+            Spacer()
+            sideButton("A", side: .a, country: country, tint: Theme.Palette.gold)
+            sideButton("B", side: .b, country: country, tint: Theme.Palette.danger)
+        }
+    }
+
+    private func sideButton(_ label: String, side: Side, country: Country,
+                            tint: Color) -> some View {
+        let members = side == .a ? sideA : sideB
+        let isMember = members.contains(country.id)
+        return Button {
+            if isMember { remove(country.id) } else { add(country.id, to: side) }
+        } label: {
+            Text(label)
+                .font(Theme.Font.ui(12, weight: .bold))
+                .frame(width: 30, height: 26)
+                .background(RoundedRectangle(cornerRadius: Theme.Metric.cornerSmall)
+                    .fill(isMember ? tint : Theme.Palette.slate))
+                .foregroundStyle(isMember ? Theme.Palette.textOnLight : Theme.Palette.textSecondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(country.name) on side \(label)")
+    }
+
+    // MARK: - Membership
+
+    /// A country belongs to at most one side, so joining one leaves the other.
+    private func add(_ id: String, to side: Side) {
+        sideA.removeAll { $0 == id }
+        sideB.removeAll { $0 == id }
+        switch side {
+        case .a: sideA.append(id)
+        case .b: sideB.append(id)
+        }
+    }
+
+    private func remove(_ id: String) {
+        sideA.removeAll { $0 == id }
+        sideB.removeAll { $0 == id }
+    }
+
+    // MARK: - Result
+
+    private func resultSection(_ result: SimulationResult) -> some View {
+        Section("Result") {
+            if result.capitulated.isEmpty {
+                Text("No side was knocked out before the end date.")
+                    .font(.caption)
+            } else {
+                ForEach(result.capitulated, id: \.self) { id in
+                    Label("\(store.project.countryIndex[id]?.name ?? id) capitulated",
+                          systemImage: "flag.slash.fill")
+                    .font(.caption)
+                }
+            }
+            Text("\(result.items.count) clips generated")
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(result.log.prefix(12), id: \.self) { line in
+                Text(line).font(.system(size: 11, design: .monospaced))
+            }
+            Button("Apply to timeline") { apply(result) }
+                .buttonStyle(GoldButtonStyle())
         }
     }
 
     private func strengthSection(_ title: String,
                                  _ binding: Binding<CountryStrength>) -> some View {
         Section(title) {
+            Text("Applied to every country on this side.")
+                .font(.caption2).foregroundStyle(.secondary)
             factor("Military", binding.military)
             factor("Economy", binding.economy)
             factor("Population", binding.population)
@@ -329,31 +493,38 @@ struct SimulatorSheet: View {
         // Everything the background task needs is copied out first: capturing the
         // view's state directly would drag a non-Sendable SwiftUI struct across the
         // isolation boundary.
-        let project = store.project
-        let timeline = project.activeTimeline
-        let attackerID = attacker
-        let defenderID = defender
-        let attackerValues = attackerStrength
-        let defenderValues = defenderStrength
+        let timeline = store.project.activeTimeline
+        let membersA = sideA
+        let membersB = sideB
+        let valuesA = sideAStrength
+        let valuesB = sideBStrength
         let config = SimulationConfig(seed: UInt64(seed), randomness: randomness)
 
         Task.detached(priority: .userInitiated) {
-            let war = project.wars.first ?? War(
-                name: "War",
+            // The picked coalitions replace whatever the project's own war says: this
+            // sheet exists precisely to ask "what if these two sides fought?".
+            let war = War(
+                name: "Simulated War",
                 interval: timeline.historicalRange,
                 factions: [
-                    Faction(name: "Attacker", colorHex: "5E6860",
-                            memberCountryIDs: [attackerID]),
-                    Faction(name: "Defender", colorHex: "B04A44",
-                            memberCountryIDs: [defenderID]),
+                    Faction(name: "Side A", colorHex: "5E6860",
+                            memberCountryIDs: membersA,
+                            leaderCountryID: membersA.first),
+                    Faction(name: "Side B", colorHex: "B04A44",
+                            memberCountryIDs: membersB,
+                            leaderCountryID: membersB.first),
                 ]
             )
+            var strengths: [String: CountryStrength] = [:]
+            for id in membersA { strengths[id] = valuesA }
+            for id in membersB { strengths[id] = valuesB }
+
             let simulator = (try? WarSimulator(config: config, library: .shared))
                 ?? WarSimulator(config: config, neighbours: [:])
             let outcome = simulator.simulate(
                 war: war,
                 initialOwnership: timeline.initialOwnership,
-                strengths: [attackerID: attackerValues, defenderID: defenderValues],
+                strengths: strengths,
                 timeline: timeline
             )
             await MainActor.run {
