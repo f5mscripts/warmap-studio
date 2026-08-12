@@ -40,6 +40,17 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
     public var showsGraticule: Bool
     public var graticuleHex: String
 
+    /// Draw the frame into a small offscreen buffer and blow it up without
+    /// interpolation, on a restricted palette — the pixel-art style.
+    ///
+    /// This is a different render path rather than a set of colours, which is why it
+    /// lives here as a flag: everything downstream of it (label sizes, sprite
+    /// markers, grid snapping) keys off this one value.
+    public var isPixelated: Bool
+    /// Short edge of that buffer, in pixels. Around 200 is the sweet spot: coarse
+    /// enough that the pixels are the point, fine enough that Denmark survives.
+    public var pixelShortEdge: Int
+
     public init(oceanHex: String = "121C26",
                 oceanDeepHex: String = "0C141C",
                 neutralLandHex: String = "686C74",
@@ -60,7 +71,9 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
                 showsCountryLabels: Bool = true,
                 showsFlags: Bool = false,
                 showsGraticule: Bool = false,
-                graticuleHex: String = "1E2A36") {
+                graticuleHex: String = "1E2A36",
+                isPixelated: Bool = false,
+                pixelShortEdge: Int = 200) {
         self.oceanHex = oceanHex
         self.oceanDeepHex = oceanDeepHex
         self.neutralLandHex = neutralLandHex
@@ -82,6 +95,52 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
         self.showsFlags = showsFlags
         self.showsGraticule = showsGraticule
         self.graticuleHex = graticuleHex
+        self.isPixelated = isPixelated
+        self.pixelShortEdge = pixelShortEdge
+    }
+
+    /// Decodes field by field so a style saved before a field existed still loads.
+    ///
+    /// Synthesised decoding would refuse the whole style — and with it the whole
+    /// project — the moment a new key was added, which is exactly what happened when
+    /// the pixel fields arrived.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let fallback = MapRenderStyle()
+        func string(_ key: CodingKeys, _ fallbackHex: String) throws -> String {
+            try c.decodeIfPresent(String.self, forKey: key) ?? fallbackHex
+        }
+        oceanHex = try string(.oceanHex, fallback.oceanHex)
+        oceanDeepHex = try string(.oceanDeepHex, fallback.oceanDeepHex)
+        neutralLandHex = try string(.neutralLandHex, fallback.neutralLandHex)
+        coastlineHex = try string(.coastlineHex, fallback.coastlineHex)
+        borderHex = try string(.borderHex, fallback.borderHex)
+        coastlineWidth = try c.decodeIfPresent(Double.self, forKey: .coastlineWidth)
+            ?? fallback.coastlineWidth
+        borderWidth = try c.decodeIfPresent(Double.self, forKey: .borderWidth) ?? fallback.borderWidth
+        cityDotHex = try string(.cityDotHex, fallback.cityDotHex)
+        cityLabelHex = try string(.cityLabelHex, fallback.cityLabelHex)
+        capitalDotHex = try string(.capitalDotHex, fallback.capitalDotHex)
+        labelHex = try string(.labelHex, fallback.labelHex)
+        labelOutlineHex = try string(.labelOutlineHex, fallback.labelOutlineHex)
+        territoryOpacity = try c.decodeIfPresent(Double.self, forKey: .territoryOpacity)
+            ?? fallback.territoryOpacity
+        contestedHighlight = try c.decodeIfPresent(Double.self, forKey: .contestedHighlight)
+            ?? fallback.contestedHighlight
+        showsCities = try c.decodeIfPresent(Bool.self, forKey: .showsCities) ?? fallback.showsCities
+        maximumCityImportance = try c.decodeIfPresent(Int.self, forKey: .maximumCityImportance)
+            ?? fallback.maximumCityImportance
+        showsCapitalsOnly = try c.decodeIfPresent(Bool.self, forKey: .showsCapitalsOnly)
+            ?? fallback.showsCapitalsOnly
+        showsCountryLabels = try c.decodeIfPresent(Bool.self, forKey: .showsCountryLabels)
+            ?? fallback.showsCountryLabels
+        showsFlags = try c.decodeIfPresent(Bool.self, forKey: .showsFlags) ?? fallback.showsFlags
+        showsGraticule = try c.decodeIfPresent(Bool.self, forKey: .showsGraticule)
+            ?? fallback.showsGraticule
+        graticuleHex = try string(.graticuleHex, fallback.graticuleHex)
+        isPixelated = try c.decodeIfPresent(Bool.self, forKey: .isPixelated) ?? fallback.isPixelated
+        pixelShortEdge = try c.decodeIfPresent(Int.self, forKey: .pixelShortEdge)
+            ?? fallback.pixelShortEdge
     }
 
     /// The look that goes with each era's map style.
@@ -127,6 +186,34 @@ public struct MapRenderStyle: Hashable, Codable, Sendable {
                                   territoryOpacity: 0.86,
                                   showsGraticule: true,
                                   graticuleHex: "8A9378")
+
+        case .pixel:
+            // Every colour here is a palette entry, and every width is measured in
+            // low-resolution pixels rather than points: a border of 2 is two of the
+            // big square pixels, not two hairlines that vanish on upscale.
+            return MapRenderStyle(oceanHex: PixelPalette.sea,
+                                  oceanDeepHex: PixelPalette.deepSea,
+                                  neutralLandHex: PixelPalette.neutralLand,
+                                  coastlineHex: PixelPalette.ink,
+                                  borderHex: PixelPalette.ink,
+                                  coastlineWidth: 1,
+                                  borderWidth: 2,
+                                  cityDotHex: PixelPalette.paper,
+                                  cityLabelHex: PixelPalette.paper,
+                                  capitalDotHex: PixelPalette.amber,
+                                  labelHex: PixelPalette.paper,
+                                  labelOutlineHex: PixelPalette.ink,
+                                  // Partial opacity would blend two palette entries
+                                  // into a colour that is in neither.
+                                  territoryOpacity: 1.0,
+                                  contestedHighlight: 0.55,
+                                  showsCities: true,
+                                  maximumCityImportance: 1,
+                                  showsCountryLabels: true,
+                                  showsGraticule: false,
+                                  graticuleHex: PixelPalette.shallowSea,
+                                  isPixelated: true,
+                                  pixelShortEdge: 200)
         }
     }
 }

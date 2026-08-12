@@ -5,6 +5,7 @@ struct NewProjectWizard: View {
 
     let onCreate: (WarMapProject) -> Void
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
 
     @State private var step = 0
     @State private var name = "Untitled Map"
@@ -16,6 +17,11 @@ struct NewProjectWizard: View {
     @State private var exportPresetID = "tiktok"
     @State private var regions: [MapRegion] = []
     @State private var mapStyle: MapStyle = .military
+    /// True once the style has been settled by something other than the era — the
+    /// user's default in Settings, or the picker on the last step. Choosing an era
+    /// then stops overwriting it, which is what makes "always start in Pixel Art" a
+    /// setting that actually holds.
+    @State private var styleIsPinned = false
 
     /// Historical map presets, layered on top of the geographic regions.
     private let historicalMaps: [(id: String, name: String, region: String, era: HistoricalEra)] = [
@@ -53,7 +59,13 @@ struct NewProjectWizard: View {
                     }
                 }
             }
-            .onAppear { regions = (try? MapLibrary.shared.regions()) ?? [] }
+            .onAppear {
+                regions = (try? MapLibrary.shared.regions()) ?? []
+                if let preferred = appState.preferredMapStyle {
+                    mapStyle = preferred
+                    styleIsPinned = true
+                }
+            }
         }
     }
 
@@ -78,7 +90,7 @@ struct NewProjectWizard: View {
                         era = preset.era
                         startYear = preset.era.startYear
                         endYear = preset.era.endYear
-                        mapStyle = preset.era.suggestedMapStyle
+                        if !styleIsPinned { mapStyle = preset.era.suggestedMapStyle }
                     } label: {
                         HStack {
                             Text(preset.name)
@@ -105,7 +117,7 @@ struct NewProjectWizard: View {
                 .onChange(of: era) { _, newValue in
                     startYear = newValue.startYear
                     endYear = newValue.endYear
-                    mapStyle = newValue.suggestedMapStyle
+                    if !styleIsPinned { mapStyle = newValue.suggestedMapStyle }
                 }
                 Text(era.summary).font(.caption).foregroundStyle(.secondary)
             }
@@ -151,12 +163,18 @@ struct NewProjectWizard: View {
                 .labelsHidden()
             }
             Section("Map style") {
-                Picker("Style", selection: $mapStyle) {
+                // A menu rather than segments: five styles do not fit across an
+                // iPhone, and "Pixel Art" is the one that gets truncated.
+                //
+                // The binding is written out so that only a *tap* pins the style —
+                // an `onChange` would also fire when choosing an era set it, and the
+                // era would then stop driving it after the first change.
+                Picker("Style", selection: Binding(get: { mapStyle },
+                                                   set: { mapStyle = $0; styleIsPinned = true })) {
                     ForEach(MapStyle.allCases) { style in
                         Text(style.displayName).tag(style)
                     }
                 }
-                .pickerStyle(.segmented)
             }
         }
     }
@@ -174,6 +192,12 @@ struct NewProjectWizard: View {
             var project = preset.build()
             project.id = UUID()
             if name != "Untitled Map" { project.name = name }
+            // A scenario keeps its curated look unless the style was chosen
+            // deliberately — in Settings or on the last step.
+            if styleIsPinned {
+                project.mapStyle = mapStyle
+                project.renderStyle = .preset(mapStyle)
+            }
             onCreate(project)
             dismiss()
             return

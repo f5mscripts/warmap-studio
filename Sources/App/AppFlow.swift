@@ -21,7 +21,14 @@ public final class AppState: ObservableObject {
         static let previewQuality = "previewQuality"
     }
 
+    /// `defaultMapStyle` value meaning "whatever suits the era", the behaviour new
+    /// projects had before the setting was wired up to anything.
+    public static let automaticMapStyle = "auto"
+
     private let defaults: UserDefaults
+
+    /// The style new projects should open in, or nil to follow the era.
+    public var preferredMapStyle: MapStyle? { MapStyle(rawValue: defaultMapStyle) }
 
     @Published public var hasCompletedOnboarding: Bool {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Key.onboarding) }
@@ -35,6 +42,8 @@ public final class AppState: ObservableObject {
     @Published public var defaultDateFormat: String {
         didSet { defaults.set(defaultDateFormat, forKey: Key.dateFormat) }
     }
+    /// The style new projects start in, or `AppState.automaticMapStyle` to let the
+    /// era choose — which is what it did unconditionally before.
     @Published public var defaultMapStyle: String {
         didSet { defaults.set(defaultMapStyle, forKey: Key.mapStyle) }
     }
@@ -53,7 +62,7 @@ public final class AppState: ObservableObject {
         defaultFPS = defaults.object(forKey: Key.fps) as? Int ?? 30
         defaultDateFormat = defaults.string(forKey: Key.dateFormat)
             ?? HistoricalDate.Format.dayMonthNameYear.rawValue
-        defaultMapStyle = defaults.string(forKey: Key.mapStyle) ?? MapStyle.military.rawValue
+        defaultMapStyle = defaults.string(forKey: Key.mapStyle) ?? Self.automaticMapStyle
         autosaveEnabled = defaults.object(forKey: Key.autosave) as? Bool ?? true
         previewQuality = defaults.object(forKey: Key.previewQuality) as? Int ?? 1
     }
@@ -167,6 +176,7 @@ struct SettingsScreen: View {
 
                 Section("Appearance") {
                     Picker("Default map style", selection: $appState.defaultMapStyle) {
+                        Text("Match the era").tag(AppState.automaticMapStyle)
                         ForEach(MapStyle.allCases) { style in
                             Text(style.displayName).tag(style.rawValue)
                         }

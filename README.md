@@ -17,6 +17,7 @@ analytics, no advertising and no tracking, and works entirely offline.
 |---|---|
 | **Map engine** | 184 territory units from Natural Earth at three levels of detail, Mercator and equirectangular projections, pan/zoom/rotate, and political borders that disappear where both sides share an owner |
 | **Territory animation** | Advancing colour sweeps with a real compass bearing, so an invasion comes from the side it actually came from |
+| **Pixel-art mode** | A retro-game style: the whole frame rendered into a ~200-pixel buffer on a 24-colour palette and blown up without smoothing, with sprite unit counters and battle markers |
 | **Countries** | Empires, kingdoms, republics, colonies, puppets and occupied zones, with lifetimes — extinct polities vanish from the picker outside their own era |
 | **Flags** | Drawn procedurally, resolved by date: Germany flies a different flag in 1914, 1925 and 1940 |
 | **Timeline** | Eight tracks, draggable clips, a BC-capable date ruler, playback with speed control and looping |
@@ -156,7 +157,7 @@ Sources/
   Simulation/     armies, frontlines, battles, events, seeded war simulator
   Timeline/       tracks, clips, and the evaluator that turns time into a frame
   Animation/      easing, interpolation, text elements and their animations
-  Rendering/      the shared Core Graphics scene renderer
+  Rendering/      the shared Core Graphics scene renderer, plus the pixel-art pass
   Export/         presets, audio clips, the AVAssetWriter pipeline
   Project/        .warmap format, store, editor state, undo, autosave
   AI/             scenario generator protocol + offline implementation
@@ -173,7 +174,10 @@ special case.
 
 **Rendering is one code path.** The live editor and the video exporter call the same
 `MapSceneRenderer` with the same `WorldSnapshot`. The preview cannot drift from the
-export because there is nothing to drift.
+export because there is nothing to drift. The pixel style is the same path again, run
+into a small offscreen buffer and blown up by a whole-number factor with
+interpolation off — so it is real pixels rather than large rectangles, and the
+preview is the export at a different size.
 
 **Evaluation is pure.** A frame is a function of `(timeline, time)` — a replay from
 the initial state, not incremental mutation. Scrubbing backwards produces exactly

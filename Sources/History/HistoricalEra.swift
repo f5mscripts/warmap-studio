@@ -134,6 +134,9 @@ public enum MapStyle: String, Codable, CaseIterable, Sendable, Identifiable {
     case military
     /// Clean, high-contrast, modern reference atlas.
     case atlas
+    /// Retro game look: the whole map rendered small, on a restricted palette, and
+    /// blown up without smoothing.
+    case pixel
 
     public var id: String { rawValue }
 
@@ -143,6 +146,7 @@ public enum MapStyle: String, Codable, CaseIterable, Sendable, Identifiable {
         case .antique: return "Antique"
         case .military: return "Military"
         case .atlas: return "Atlas"
+        case .pixel: return "Pixel Art"
         }
     }
 }

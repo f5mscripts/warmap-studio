@@ -3,7 +3,19 @@
 Requirements captured directly from the user. Everything below is decided — no
 further clarification needed before building.
 
-## 1. Pixel-art / retro game look  (new, biggest item)
+## 1. Pixel-art / retro game look  (new, biggest item)  — **DONE**
+
+Built in `Sources/Rendering/{PixelPalette,PixelGrid,PixelSprite}.swift` plus the
+pixel pass in `MapSceneRenderer`. `MapStyle.pixel` is in the picker, and Settings →
+*Default map style* now actually applies to new projects (it previously did nothing),
+so "always start in Pixel Art" holds. Preview it without a device with
+`python3 Tools/preview_reference.py` → `Tools/out/04_pixel_sprites.png`,
+`05_pixel_europe_1939.png`, `06_pixel_invasion.png`.
+
+What is left for section 4: the sprite set covers today's nine `ArmyIcon` cases only.
+Widening `ArmyIcon` means adding art to `PixelSprite.army(_:)` and nothing else.
+
+The original brief follows, for reference.
 
 The reference is TikTok war-map videos in a **pixelated game style**. This is a new
 render mode, not a restyle of the existing one.
